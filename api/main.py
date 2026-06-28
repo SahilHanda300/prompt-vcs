@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import prompts, sites, chat, eval, audit, compliance, rollback
+from routers import prompts, sites, chat, eval, audit, compliance, rollback
 
 app = FastAPI(title="PromptVCS API", version="1.0.0")
 

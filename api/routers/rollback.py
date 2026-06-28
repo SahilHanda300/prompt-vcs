@@ -2,9 +2,9 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import ProgrammingError
-from api.db.connection import get_db
-from api.db import procedures as db
-from api.models.audit import RollbackRequest
+from db.connection import get_db
+from db import procedures as db
+from models.audit import RollbackRequest
 
 router = APIRouter(prefix="/rollback", tags=["rollback"])
 

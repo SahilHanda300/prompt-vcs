@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.engine import Connection
-from api.db.connection import get_db
-from api.db import procedures as db
-from api.models.audit import CliAuditLogItem, EnvironmentStatusItem
+from db.connection import get_db
+from db import procedures as db
+from models.audit import CliAuditLogItem, EnvironmentStatusItem
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 

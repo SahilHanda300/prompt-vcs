@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.engine import Connection
 import anthropic
-from api.db.connection import get_db
-from api.db import procedures as db
-from api.models.chat import ChatRequest
+from db.connection import get_db
+from db import procedures as db
+from models.chat import ChatRequest
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -55,7 +55,7 @@ def chat(
             import threading
 
             def log():
-                from api.db.connection import engine
+                from db.connection import engine
                 from sqlalchemy import text
                 with engine.connect() as log_conn:
                     db.log_chat(

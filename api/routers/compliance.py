@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.engine import Connection
-from api.db.connection import get_db
-from api.db import procedures as db
-from api.models.audit import PromotionAuditItem
+from db.connection import get_db
+from db import procedures as db
+from models.audit import PromotionAuditItem
 
 router = APIRouter(prefix="/compliance", tags=["compliance"])
 

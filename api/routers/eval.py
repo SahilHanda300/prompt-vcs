@@ -1,9 +1,9 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.engine import Connection
-from api.db.connection import get_db
-from api.db import procedures as db
-from api.models.eval_result import (
+from db.connection import get_db
+from db import procedures as db
+from models.eval_result import (
     WriteEvalResultRequest,
     WriteTestCaseResultRequest,
     QAFailureItem,

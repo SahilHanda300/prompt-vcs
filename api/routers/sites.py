@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.engine import Connection
-from api.db.connection import get_db
-from api.db import procedures as db
-from api.models.site import SiteListItem, SiteDashboardItem
-from api.models.eval_result import ProdOutputItem, DegradedTestCase
+from db.connection import get_db
+from db import procedures as db
+from models.site import SiteListItem, SiteDashboardItem
+from models.eval_result import ProdOutputItem, DegradedTestCase
 
 router = APIRouter(prefix="/sites", tags=["sites"])
 
