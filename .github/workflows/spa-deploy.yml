@@ -1,0 +1,30 @@
+name: Deploy SPA to Netlify
+
+on:
+  push:
+    branches: [main]
+    paths: ["frontend/**"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install and build
+        run: cd frontend && npm ci && npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - name: Deploy to Netlify
+        uses: netlify/actions/deploy@master
+        with:
+          publish-dir: frontend/dist
+          production-deploy: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

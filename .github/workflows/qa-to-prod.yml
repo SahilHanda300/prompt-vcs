@@ -1,0 +1,35 @@
+name: QA → PROD Sanity Check
+
+on:
+  repository_dispatch:
+    types: [qa-promoted]
+
+jobs:
+  sanity-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-pipeline-${{ hashFiles('pipeline/requirements.txt') }}
+          restore-keys: pip-pipeline-
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Run QA → PROD sanity check
+        run: python pipeline/run_evaluation.py --stage QA_TO_PROD --sample 10
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SQL_CONNECTION: ${{ secrets.SQL_CONNECTION }}
+          PROMPT_NAME: ${{ github.event.client_payload.prompt_name }}
+          PROMPT_HASH: ${{ github.event.client_payload.prompt_hash }}
+          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
