@@ -8,14 +8,14 @@ export function PRODSitesPanel() {
   const { data, isLoading, error } = usePRODDashboard()
 
   if (isLoading) return <LoadingSpinner />
-  if (error) return <p className="text-red-400 text-sm">Failed to load dashboard.</p>
-  if (!data?.length) return <p className="text-slate-500 text-sm">No PROD sites yet.</p>
+  if (error) return <p className="text-red-500 dark:text-red-400 text-sm">Failed to load dashboard.</p>
+  if (!data?.length) return <p className="text-gray-400 dark:text-slate-500 text-sm">No PROD sites yet.</p>
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-700 text-slate-400 text-left">
+          <tr className="border-b border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 text-left">
             <th className="pb-2 pr-4 font-medium">Site</th>
             <th className="pb-2 pr-4 font-medium">Type</th>
             <th className="pb-2 pr-4 font-medium">Golden</th>
@@ -26,17 +26,17 @@ export function PRODSitesPanel() {
         </thead>
         <tbody>
           {data.map(site => (
-            <tr key={site.refname} className="border-b border-slate-800 hover:bg-slate-800/50">
+            <tr key={site.refname} className="border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50">
               <td className="py-2 pr-4">
-                <Link to={`/sites/${site.refname}`} className="text-indigo-400 hover:underline font-medium">
+                <Link to={`/sites/${site.refname}`} className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
                   {site.refname}
                 </Link>
               </td>
-              <td className="py-2 pr-4 text-slate-400">{site.prompttype}</td>
+              <td className="py-2 pr-4 text-gray-500 dark:text-slate-400">{site.prompttype}</td>
               <td className="py-2 pr-4"><ScoreBadge score={site.goldenscore} type="golden" /></td>
               <td className="py-2 pr-4"><ScoreBadge score={site.judgescore} type="judge" /></td>
               <td className="py-2 pr-4"><VersionTag hash={site.targethash} /></td>
-              <td className="py-2 text-slate-400">{site.submittedby}</td>
+              <td className="py-2 text-gray-500 dark:text-slate-400">{site.submittedby}</td>
             </tr>
           ))}
         </tbody>

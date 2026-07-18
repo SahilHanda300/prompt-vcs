@@ -9,14 +9,15 @@ html, body, #root {
   margin: 0;
   padding: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: #0a0a0f;
-  color: #e2e8f0;
 }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.dark ::-webkit-scrollbar-thumb { background: #334155; }
+:not(.dark) ::-webkit-scrollbar-thumb { background: #cbd5e1; }
 
 .input {
-  @apply w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500/60 transition-colors;
+  @apply w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-500 transition-colors;
+  @apply dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-600 dark:focus:border-indigo-500/60;
 }

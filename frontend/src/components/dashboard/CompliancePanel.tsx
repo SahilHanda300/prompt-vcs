@@ -41,41 +41,40 @@ function AuditCard({ item }: { item: PromotionAuditItem }) {
   return (
     <div className={`rounded-xl border overflow-hidden ${
       passed
-        ? 'border-emerald-900/40 bg-emerald-500/5'
-        : 'border-red-900/40 bg-red-500/5'
+        ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-500/5'
+        : 'border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-500/5'
     }`}>
-      {/* header — clickable */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full text-left p-4 hover:bg-white/5 transition-colors"
+        className="w-full text-left p-4 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center flex-wrap gap-2 mb-1.5">
-              <span className="text-white font-semibold">{item.promptname ?? '—'}</span>
+              <span className="text-gray-900 dark:text-white font-semibold">{item.promptname ?? '—'}</span>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase border ${
                 passed
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                  : 'bg-red-500/20 text-red-300 border-red-500/30'
+                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
+                  : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30'
               }`}>
                 {stageName}
               </span>
-              <span className={`text-xs font-medium ${passed ? 'text-emerald-400' : 'text-red-400'}`}>
+              <span className={`text-xs font-medium ${passed ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                 {passed ? '✓ Passed' : '✗ Failed'}
               </span>
             </div>
-            <p className="text-xs text-slate-500 truncate">
+            <p className="text-xs text-gray-400 dark:text-slate-500 truncate">
               {item.commitmessage}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <ScoreBadge score={item.goldenscore} type="golden" />
             <ScoreBadge score={item.judgescore} type="judge" />
-            <span className="text-slate-600 text-sm ml-1">{open ? '▲' : '▼'}</span>
+            <span className="text-gray-400 dark:text-slate-600 text-sm ml-1">{open ? '▲' : '▼'}</span>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 mt-2 text-xs text-slate-600">
+        <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-400 dark:text-slate-600">
           <span>{item.submittedby}</span>
           <span>·</span>
           <span title={new Date(item.runat).toLocaleString()}>{timeAgo(item.runat)}</span>
@@ -84,14 +83,12 @@ function AuditCard({ item }: { item: PromotionAuditItem }) {
         </div>
       </button>
 
-      {/* expanded */}
       {open && (
-        <div className="border-t border-slate-700/50 px-4 py-4 space-y-4">
+        <div className="border-t border-gray-200 dark:border-slate-700/50 px-4 py-4 space-y-4">
 
-          {/* statistical evidence */}
           {parsed && (
             <div>
-              <p className="text-[10px] text-slate-600 uppercase tracking-widest mb-2">Statistical Evidence</p>
+              <p className="text-[10px] text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">Statistical Evidence</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <StatBox label="Accuracy" value={parsed.golden ?? '—'} highlight={false} />
                 <StatBox label="Judge Score" value={parsed.judge ? `${parsed.judge}/5` : '—'} highlight={false} />
@@ -113,22 +110,20 @@ function AuditCard({ item }: { item: PromotionAuditItem }) {
             </div>
           )}
 
-          {/* decision record */}
           <div>
-            <p className="text-[10px] text-slate-600 uppercase tracking-widest mb-2">
+            <p className="text-[10px] text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-2">
               Decision Record
-              <span className="ml-2 normal-case text-slate-700">· EU AI Act Article 12</span>
+              <span className="ml-2 normal-case text-gray-300 dark:text-slate-700">· EU AI Act Article 12</span>
             </p>
-            <pre className="text-xs text-slate-300 bg-slate-900 border border-slate-700 rounded-lg p-3 whitespace-pre-wrap leading-relaxed font-sans">
+            <pre className="text-xs text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 whitespace-pre-wrap leading-relaxed font-sans">
               {item.promotionreason ?? 'No reason recorded.'}
             </pre>
           </div>
 
-          {/* regression gate explanation */}
           <div className={`rounded-lg p-3 text-xs leading-relaxed ${
             passed
-              ? 'bg-emerald-950/40 border border-emerald-900/30 text-emerald-200'
-              : 'bg-red-950/40 border border-red-900/30 text-red-200'
+              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-900/30 dark:text-emerald-200'
+              : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-950/40 dark:border-red-900/30 dark:text-red-200'
           }`}>
             {passed ? (
               <>
@@ -160,17 +155,19 @@ function StatBox({
   threshold?: string
 }) {
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-center">
-      <p className="text-[10px] text-slate-600 uppercase tracking-widest mb-1">{label}</p>
+    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-center">
+      <p className="text-[10px] text-gray-400 dark:text-slate-600 uppercase tracking-widest mb-1">{label}</p>
       <p className={`text-sm font-mono font-semibold ${
         highlight
-          ? good ? 'text-emerald-300' : 'text-red-300'
-          : 'text-slate-300'
+          ? good
+            ? 'text-emerald-600 dark:text-emerald-300'
+            : 'text-red-600 dark:text-red-300'
+          : 'text-gray-700 dark:text-slate-300'
       }`}>
         {value}
       </p>
       {threshold && (
-        <p className="text-[9px] text-slate-700 mt-0.5">{threshold}</p>
+        <p className="text-[9px] text-gray-300 dark:text-slate-700 mt-0.5">{threshold}</p>
       )}
     </div>
   )
@@ -180,27 +177,26 @@ export function CompliancePanel({ refName }: CompliancePanelProps) {
   const { data, isLoading, error } = useCompliance(refName)
 
   if (isLoading) return <LoadingSpinner />
-  if (error) return <p className="text-red-400 text-sm">Failed to load audit trail.</p>
-  if (!data?.length) return <p className="text-slate-500 text-sm">No promotion decisions recorded.</p>
+  if (error) return <p className="text-red-500 dark:text-red-400 text-sm">Failed to load audit trail.</p>
+  if (!data?.length) return <p className="text-gray-400 dark:text-slate-500 text-sm">No promotion decisions recorded.</p>
 
   const passed = data.filter(d => !d.regressionflag).length
   const failed = data.filter(d => d.regressionflag).length
 
   return (
     <div className="space-y-4">
-      {/* summary strip */}
       <div className="flex gap-3 flex-wrap">
-        <div className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-center">
-          <p className="text-[10px] text-slate-600 uppercase tracking-widest">Total decisions</p>
-          <p className="text-lg font-semibold text-white">{data.length}</p>
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-2 text-center">
+          <p className="text-[10px] text-gray-400 dark:text-slate-600 uppercase tracking-widest">Total decisions</p>
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">{data.length}</p>
         </div>
-        <div className="bg-emerald-950/40 border border-emerald-900/30 rounded-lg px-4 py-2 text-center">
-          <p className="text-[10px] text-emerald-700 uppercase tracking-widest">Passed</p>
-          <p className="text-lg font-semibold text-emerald-300">{passed}</p>
+        <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/30 rounded-lg px-4 py-2 text-center">
+          <p className="text-[10px] text-emerald-600 dark:text-emerald-700 uppercase tracking-widest">Passed</p>
+          <p className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">{passed}</p>
         </div>
-        <div className="bg-red-950/40 border border-red-900/30 rounded-lg px-4 py-2 text-center">
-          <p className="text-[10px] text-red-700 uppercase tracking-widest">Blocked</p>
-          <p className="text-lg font-semibold text-red-300">{failed}</p>
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/30 rounded-lg px-4 py-2 text-center">
+          <p className="text-[10px] text-red-500 dark:text-red-700 uppercase tracking-widest">Blocked</p>
+          <p className="text-lg font-semibold text-red-600 dark:text-red-300">{failed}</p>
         </div>
       </div>
 

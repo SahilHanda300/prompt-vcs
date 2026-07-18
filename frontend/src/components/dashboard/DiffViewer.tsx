@@ -28,18 +28,18 @@ export function DiffViewer({ before, after, label }: DiffViewerProps) {
 
   return (
     <div>
-      {label && <p className="text-xs text-slate-400 mb-2">{label}</p>}
-      <div className="bg-slate-900 rounded border border-slate-700 overflow-x-auto">
+      {label && <p className="text-xs text-gray-400 dark:text-slate-400 mb-2">{label}</p>}
+      <div className="bg-gray-50 dark:bg-slate-900 rounded border border-gray-200 dark:border-slate-700 overflow-x-auto">
         <pre className="text-xs font-mono p-3 leading-5">
           {lines.map((line, i) => (
             <div
               key={i}
               className={
                 line.type === 'removed'
-                  ? 'bg-red-950 text-red-300'
+                  ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
                   : line.type === 'added'
-                  ? 'bg-green-950 text-green-300'
-                  : 'text-slate-400'
+                  ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
+                  : 'text-gray-500 dark:text-slate-400'
               }
             >
               {line.type === 'removed' ? '- ' : line.type === 'added' ? '+ ' : '  '}

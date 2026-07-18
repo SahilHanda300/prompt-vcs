@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { API_URL } from '../lib/api'
+import { useAuth } from '../lib/AuthContext'
 
 type PipelineStage = 'idle' | 'submitted' | 'dev_running' | 'dev_failed' | 'qa_running' | 'prod_failed' | 'live'
 
@@ -10,11 +11,12 @@ interface PipelineState {
 }
 
 export function SubmitPage() {
+  const { user } = useAuth()
   const [mode, setMode] = useState<'chat' | 'ui'>('chat')
   const [refName, setRefName] = useState('')
   const [prompt, setPrompt] = useState('')
   const [commitMessage, setCommitMessage] = useState('')
-  const [submittedBy, setSubmittedBy] = useState('')
+  const submittedBy = user?.name ?? ''
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pipeline, setPipeline] = useState<PipelineState>({ stage: 'idle', refName: '' })
@@ -63,7 +65,6 @@ export function SubmitPage() {
           setPipeline({ stage, refName: ref, reason: data.reason })
         } else {
           if (data.stage === 'DEV_TO_QA') {
-            // passed DEV_TO_QA — keep timer running, restart poll for QA_TO_PROD
             setPipeline({ stage: 'qa_running', refName: ref })
             startPolling(ref, contentHash, false)
           } else {
@@ -82,7 +83,6 @@ export function SubmitPage() {
     if (pollRef.current) clearInterval(pollRef.current)
 
     try {
-      // Fetch current DEV hash so we can link versions in the history chain
       let parentHash: string | null = null
       try {
         const devRes = await fetch(`${API_URL}/prompts/${encodeURIComponent(refName.trim())}/DEV`)
@@ -144,16 +144,15 @@ export function SubmitPage() {
 
   return (
     <div className="p-8 max-w-xl h-full overflow-y-auto">
-      <h1 className="text-white font-semibold text-lg mb-6">Submit Prompt</h1>
+      <h1 className="text-gray-900 dark:text-white font-semibold text-lg mb-6">Submit Prompt</h1>
 
-      {/* Mode toggle */}
-      <div className="flex gap-1 p-1 bg-white/5 rounded mb-6">
+      <div className="flex gap-1 p-1 bg-gray-100 dark:bg-white/5 rounded mb-6">
         {(['chat', 'ui'] as const).map(m => (
           <button
             key={m}
             onClick={() => { setMode(m); setPrompt('') }}
             className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors ${
-              mode === m ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              mode === m ? 'bg-indigo-600 text-white' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             {m === 'chat' ? 'Chat Assistant' : 'Generate UI'}
@@ -194,16 +193,15 @@ export function SubmitPage() {
           />
         </Field>
 
-        <Field label="Your Name">
+        <Field label="Submitting as">
           <input
-            className="input"
-            placeholder="e.g. sahil-handa"
+            className="input opacity-70 cursor-not-allowed"
             value={submittedBy}
-            onChange={e => setSubmittedBy(e.target.value)}
+            readOnly
           />
         </Field>
 
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
 
         <button
           onClick={handleSubmit}
@@ -215,28 +213,32 @@ export function SubmitPage() {
       </div>
 
       {pipeline.stage !== 'idle' && (
-        <div className="mt-8 border-t border-white/5 pt-6 space-y-3">
+        <div className="mt-8 border-t border-gray-200 dark:border-white/5 pt-6 space-y-3">
           {activeSteps.map((s, i) => {
-            const isFailed = s.label.includes('failed')
+            const isFailed  = s.label.includes('failed')
             const isRunning = s.label.includes('running')
-            const isLive = s.label.includes('live')
+            const isLive    = s.label.includes('live')
             return (
               <div key={i} className="flex items-start gap-3">
                 <div className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isFailed ? 'bg-red-400' : isRunning ? 'bg-indigo-400 animate-pulse' : 'bg-emerald-400'
+                  isFailed ? 'bg-red-500' : isRunning ? 'bg-indigo-500 animate-pulse' : 'bg-emerald-500'
                 }`} />
                 <div>
-                  <p className={`text-sm ${isFailed ? 'text-red-300' : isLive ? 'text-emerald-300 font-medium' : 'text-slate-300'}`}>
+                  <p className={`text-sm ${
+                    isFailed ? 'text-red-600 dark:text-red-300'
+                    : isLive ? 'text-emerald-600 dark:text-emerald-300 font-medium'
+                    : 'text-gray-700 dark:text-slate-300'
+                  }`}>
                     {s.label}
                     {isRunning && elapsed > 0 && (
-                      <span className="ml-2 text-xs text-slate-600">{elapsed}s</span>
+                      <span className="ml-2 text-xs text-gray-400 dark:text-slate-600">{elapsed}s</span>
                     )}
                   </p>
                   {isRunning && (
-                    <p className="mt-0.5 text-xs text-slate-600">{runningHint()}</p>
+                    <p className="mt-0.5 text-xs text-gray-400 dark:text-slate-600">{runningHint()}</p>
                   )}
                   {isFailed && pipeline.reason && (
-                    <p className="mt-1 text-xs text-slate-500 leading-relaxed">{pipeline.reason}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-500 leading-relaxed">{pipeline.reason}</p>
                   )}
                 </div>
               </div>
@@ -251,7 +253,7 @@ export function SubmitPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs text-slate-500 mb-1.5 uppercase tracking-wider">{label}</label>
+      <label className="block text-xs text-gray-500 dark:text-slate-500 mb-1.5 uppercase tracking-wider">{label}</label>
       {children}
     </div>
   )
