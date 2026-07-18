@@ -16,7 +16,7 @@ export function SubmitPage() {
   const [refName, setRefName] = useState('')
   const [prompt, setPrompt] = useState('')
   const [commitMessage, setCommitMessage] = useState('')
-  const submittedBy = user?.name ?? ''
+  const submittedBy = user?.username ?? ''
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pipeline, setPipeline] = useState<PipelineState>({ stage: 'idle', refName: '' })
