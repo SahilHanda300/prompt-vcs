@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { API_URL } from '../../lib/api'
+import { useAuth } from '../../lib/AuthContext'
 import { useSiteStore } from '../../stores/siteStore'
 import type { SiteListItem } from '../../types'
 
@@ -53,12 +54,12 @@ function TypewriterText({ content, streaming }: { content: string; streaming?: b
 
 // ── Main component ────────────────────────────────────────────────────────────
 export function ChatInterface({ site }: Props) {
+  const { user } = useAuth()
   const {
     userName, setUserName,
     getSession, addMessage, appendToLastMessage, setLastMessageStreaming, clearSession, setMessages,
   } = useSiteStore()
 
-  const [nameInput, setNameInput] = useState('')
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -79,7 +80,12 @@ export function ChatInterface({ site }: Props) {
     prevStreamingRef.current = isStreaming
   }, [isStreaming])
 
-  // Auto-load history when navigating to a new site with username already set
+  // Set username from auth session automatically
+  useEffect(() => {
+    if (user?.username && !userName) setUserName(user.username)
+  }, [user?.username])
+
+  // Auto-load history when navigating to a new site
   useEffect(() => {
     if (!userName || loadedKeysRef.current.has(sessionKey)) return
     loadedKeysRef.current.add(sessionKey)
@@ -101,16 +107,6 @@ export function ChatInterface({ site }: Props) {
     } finally {
       setHistoryLoading(false)
     }
-  }
-
-  async function handleSetName(e: React.FormEvent) {
-    e.preventDefault()
-    const name = nameInput.trim()
-    if (!name) return
-    const key = `${name}:${site.refname}`
-    loadedKeysRef.current.add(key)
-    setUserName(name)
-    await loadHistory(name, key)
   }
 
   async function sendMessage() {
@@ -148,36 +144,6 @@ export function ChatInterface({ site }: Props) {
       setLastMessageStreaming(sessionKey, false)
       setIsStreaming(false)
     }
-  }
-
-  // ── Name prompt ───────────────────────────────────────────────────────────
-  if (!userName) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center p-8">
-        <div className="w-full max-w-sm">
-          <h2 className="text-gray-900 dark:text-white font-semibold text-lg mb-1">{site.refname}</h2>
-          <p className="text-gray-500 dark:text-slate-400 text-sm mb-6">
-            Enter your name to start chatting. Your history will be saved.
-          </p>
-          <form onSubmit={handleSetName} className="space-y-3">
-            <input
-              autoFocus
-              className="w-full bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-              placeholder="e.g. sahil-handa"
-              value={nameInput}
-              onChange={e => setNameInput(e.target.value)}
-            />
-            <button
-              type="submit"
-              disabled={!nameInput.trim()}
-              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white text-sm font-medium rounded transition-colors"
-            >
-              Start chatting
-            </button>
-          </form>
-        </div>
-      </div>
-    )
   }
 
   // ── Chat UI ───────────────────────────────────────────────────────────────
