@@ -51,8 +51,8 @@ def run_golden_tests(
 
     results: list[dict[str, Any]] = []
     for tc in test_cases:
-        input_text = tc["input"]
-        expected = tc["expected_output"]
+        input_text = str(tc.get("input") or tc.get("input_text", ""))
+        expected = str(tc.get("expected_output") or tc.get("expected", ""))
         actual = _call_prompt(client, system_template, user_template, model_params, input_text, effective_model)
         score = _golden_score(actual, expected)
         results.append({
