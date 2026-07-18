@@ -2,12 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from pydantic import BaseModel
-from passlib.context import CryptContext
+import bcrypt
 from db.connection import get_db
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class RegisterRequest(BaseModel):
@@ -36,7 +34,7 @@ def register(body: RegisterRequest, db: Connection = Depends(get_db)):
     if len(body.password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters.")
 
-    pass_hash = pwd_ctx.hash(body.password)
+    pass_hash = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
 
     try:
         row = db.execute(
@@ -61,7 +59,7 @@ def login(body: LoginRequest, db: Connection = Depends(get_db)):
     if not row:
         raise HTTPException(401, "No account found with that username.")
 
-    if not pwd_ctx.verify(body.password, row.passhash):
+    if not bcrypt.checkpw(body.password.encode(), row.passhash.encode()):
         raise HTTPException(401, "Incorrect password.")
 
     return AuthResponse(user_id=str(row.userid), name=row.name, username=row.username)
