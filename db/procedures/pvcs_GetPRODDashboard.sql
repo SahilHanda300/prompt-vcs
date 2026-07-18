@@ -1,5 +1,7 @@
--- Returns full PROD metadata for the dashboard in a single call.
-CREATE OR REPLACE FUNCTION pvcs_GetPRODDashboard()
+-- Returns full PROD metadata for the dashboard, filtered by submitter.
+CREATE OR REPLACE FUNCTION pvcs_GetPRODDashboard(
+    p_submitted_by TEXT DEFAULT NULL
+)
 RETURNS TABLE (
     refname         TEXT,
     targethash      TEXT,
@@ -44,6 +46,7 @@ BEGIN
         LIMIT 1
     ) e ON TRUE
     WHERE r.Environment = 'PROD'
+      AND (p_submitted_by IS NULL OR p.SubmittedBy = p_submitted_by)
     ORDER BY r.UpdatedAt DESC;
 END;
 $$;

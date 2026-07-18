@@ -1,5 +1,7 @@
--- Returns all PROD prompts for the SPA sidebar (polled every 30s).
-CREATE OR REPLACE FUNCTION pvcs_GetAllPRODSites()
+-- Returns PROD prompts for the SPA sidebar, filtered by submitter.
+CREATE OR REPLACE FUNCTION pvcs_GetAllPRODSites(
+    p_submitted_by TEXT DEFAULT NULL
+)
 RETURNS TABLE (
     refname          TEXT,
     targethash       TEXT,
@@ -44,6 +46,7 @@ BEGIN
         LIMIT 1
     ) e ON TRUE
     WHERE r.Environment = 'PROD'
+      AND (p_submitted_by IS NULL OR p.SubmittedBy = p_submitted_by)
     ORDER BY r.UpdatedAt DESC;
 END;
 $$;

@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.engine import Connection
 from db.connection import get_db
 from db import procedures as db
@@ -50,8 +50,11 @@ def write_test_case_result(
 
 
 @router.get("/failures", response_model=list[QAFailureItem])
-def get_qa_failures(conn: Connection = Depends(get_db)) -> list[QAFailureItem]:
-    rows = db.get_qa_failures(conn)
+def get_qa_failures(
+    username: str | None = Query(default=None),
+    conn: Connection = Depends(get_db),
+) -> list[QAFailureItem]:
+    rows = db.get_qa_failures(conn, submitted_by=username)
     return [QAFailureItem(**r) for r in rows]
 
 

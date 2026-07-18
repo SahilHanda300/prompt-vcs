@@ -1,4 +1,6 @@
-CREATE OR REPLACE FUNCTION pvcs_GetQAFailures()
+CREATE OR REPLACE FUNCTION pvcs_GetQAFailures(
+    p_submitted_by TEXT DEFAULT NULL
+)
 RETURNS TABLE (
     evalid          UUID,
     prompthash      TEXT,
@@ -28,6 +30,7 @@ BEGIN
     INNER JOIN Prompts p ON e.PromptHash = p.ContentHash
     LEFT JOIN Refs r ON e.PromptHash = r.TargetHash AND r.Environment = 'DEV'
     WHERE e.RegressionFlag = TRUE
+      AND (p_submitted_by IS NULL OR p.SubmittedBy = p_submitted_by)
     ORDER BY e.RunAt DESC;
 END;
 $$;

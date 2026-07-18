@@ -213,18 +213,27 @@ def get_degraded_test_cases(conn: Connection, eval_id: UUID) -> list[dict[str, A
     return [dict(row) for row in result.mappings().all()]
 
 
-def get_all_prod_sites(conn: Connection) -> list[dict[str, Any]]:
-    result = conn.execute(text("SELECT * FROM pvcs_GetAllPRODSites()"))
+def get_all_prod_sites(conn: Connection, submitted_by: str | None = None) -> list[dict[str, Any]]:
+    result = conn.execute(
+        text("SELECT * FROM pvcs_GetAllPRODSites(:by)"),
+        {"by": submitted_by},
+    )
     return [dict(row) for row in result.mappings().all()]
 
 
-def get_prod_dashboard(conn: Connection) -> list[dict[str, Any]]:
-    result = conn.execute(text("SELECT * FROM pvcs_GetPRODDashboard()"))
+def get_prod_dashboard(conn: Connection, submitted_by: str | None = None) -> list[dict[str, Any]]:
+    result = conn.execute(
+        text("SELECT * FROM pvcs_GetPRODDashboard(:by)"),
+        {"by": submitted_by},
+    )
     return [dict(row) for row in result.mappings().all()]
 
 
-def get_qa_failures(conn: Connection) -> list[dict[str, Any]]:
-    result = conn.execute(text("SELECT * FROM pvcs_GetQAFailures()"))
+def get_qa_failures(conn: Connection, submitted_by: str | None = None) -> list[dict[str, Any]]:
+    result = conn.execute(
+        text("SELECT * FROM pvcs_GetQAFailures(:by)"),
+        {"by": submitted_by},
+    )
     return [dict(row) for row in result.mappings().all()]
 
 

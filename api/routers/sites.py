@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.engine import Connection
 from db.connection import get_db
 from db import procedures as db
@@ -9,14 +9,20 @@ router = APIRouter(prefix="/sites", tags=["sites"])
 
 
 @router.get("", response_model=list[SiteListItem])
-def get_all_prod_sites(conn: Connection = Depends(get_db)) -> list[SiteListItem]:
-    rows = db.get_all_prod_sites(conn)
+def get_all_prod_sites(
+    username: str | None = Query(default=None),
+    conn: Connection = Depends(get_db),
+) -> list[SiteListItem]:
+    rows = db.get_all_prod_sites(conn, submitted_by=username)
     return [SiteListItem(**r) for r in rows]
 
 
 @router.get("/dashboard", response_model=list[SiteDashboardItem])
-def get_prod_dashboard(conn: Connection = Depends(get_db)) -> list[SiteDashboardItem]:
-    rows = db.get_prod_dashboard(conn)
+def get_prod_dashboard(
+    username: str | None = Query(default=None),
+    conn: Connection = Depends(get_db),
+) -> list[SiteDashboardItem]:
+    rows = db.get_prod_dashboard(conn, submitted_by=username)
     return [SiteDashboardItem(**r) for r in rows]
 
 
