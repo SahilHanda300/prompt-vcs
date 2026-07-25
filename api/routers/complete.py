@@ -35,6 +35,36 @@ def _trim_to_understandable_end(completion: str) -> str:
         words.pop()
     return " ".join(words)
 
+_MAX_SUMMARY_WORDS = 5
+
+_COMMIT_SUMMARY_PROMPT = """Read the following AI prompt / system instructions and write a short \
+git-commit-style label describing what it does or the change it represents. \
+2-5 words, Title Case, no ending punctuation, no quotes, no markdown, no explanation. \
+Examples of the style: "Fixed Hallucination", "Added Stricter Tone", "Initial Version", "Simplified Refund Flow".
+
+Prompt:
+\"\"\"{text}\"\"\"
+
+Short summary (2-5 words):"""
+
+
+def _complete_commit_summary(text: str) -> CompleteResponse:
+    try:
+        response = _client.chat.completions.create(
+            model=os.environ.get("EVAL_MODEL", "llama-3.1-8b-instant"),
+            messages=[{"role": "user", "content": _COMMIT_SUMMARY_PROMPT.format(text=text)}],
+            temperature=0.3,
+            max_tokens=12,
+            stop=["\n"],
+        )
+        completion = (response.choices[0].message.content or "").strip()
+    except Exception:
+        return CompleteResponse(completion="")
+
+    completion = completion.strip('"').strip("'")
+    completion = " ".join(completion.split()[:_MAX_SUMMARY_WORDS])
+    return CompleteResponse(completion=completion)
+
 _PROMPT = """Finish this sentence. {hint}
 Stay strictly on the same topic and continue the exact idea being described — do not change subject or introduce anything new. \
 Keep it VERY short: at most 3-4 words, a single short phrase — never a list, never multiple clauses joined by commas or "and"/"as well as". \
@@ -51,6 +81,9 @@ def complete(body: CompleteRequest) -> CompleteResponse:
     text = body.text.strip()
     if not text:
         return CompleteResponse(completion="")
+
+    if body.context == "commit-summary":
+        return _complete_commit_summary(text)
 
     hint = _CONTEXT_HINTS.get(body.context or "", "")
 

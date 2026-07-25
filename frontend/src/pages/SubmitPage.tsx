@@ -88,12 +88,54 @@ function useGhostCompletion(params: {
   return { suffix, accept, reset, capped: consecutiveAccepts >= MAX_CONSECUTIVE_GHOST_ACCEPTS }
 }
 
+// Derives a short "what changed" label from the live prompt text via the
+// same debounced /complete endpoint — always tracks the current prompt, so
+// there's no separate state for the user to keep in sync manually.
+function useCommitSummary(text: string): string {
+  const [summary, setSummary] = useState('')
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const requestIdRef = useRef(0)
+
+  useEffect(() => {
+    requestIdRef.current += 1
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    if (abortRef.current) abortRef.current.abort()
+
+    const trimmed = text.trim()
+    if (!trimmed) { setSummary(''); return }
+
+    const requestId = requestIdRef.current
+
+    timeoutRef.current = setTimeout(async () => {
+      const controller = new AbortController()
+      abortRef.current = controller
+      try {
+        const res = await fetch(`${API_URL}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: trimmed, context: 'commit-summary' }),
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const data: { completion: string } = await res.json()
+        if (requestId === requestIdRef.current) setSummary(data.completion)
+      } catch { /* aborted or network error — leave the last summary in place */ }
+    }, COMPLETION_DEBOUNCE_MS)
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [text])
+
+  return summary
+}
+
 export function SubmitPage() {
   const { user } = useAuth()
   const [mode, setMode] = useState<'chat' | 'ui'>('chat')
   const [refName, setRefName] = useState('')
   const [prompt, setPrompt] = useState('')
-  const [commitMessage, setCommitMessage] = useState('')
   const submittedBy = user?.username ?? ''
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -112,6 +154,8 @@ export function SubmitPage() {
     context: mode === 'ui' ? 'ui-description' : 'chat-prompt',
     join: joinWithSpace,
   })
+
+  const commitSummary = useCommitSummary(prompt)
 
   // Keep the ghost overlay's scroll position in sync with the real textarea —
   // otherwise once content grows past the visible area and the field
@@ -199,7 +243,7 @@ export function SubmitPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!refName.trim() || !prompt.trim() || !commitMessage.trim() || !submittedBy.trim()) return
+    if (!refName.trim() || !prompt.trim() || !submittedBy.trim()) return
     setLoading(true)
     setError('')
     if (pollRef.current) clearInterval(pollRef.current)
@@ -224,7 +268,7 @@ export function SubmitPage() {
           model_params: { max_tokens: 512, temperature: 0.7 },
           submitted_by: submittedBy.trim(),
           country: 'Unknown',
-          commit_message: commitMessage.trim(),
+          commit_message: (commitSummary || prompt).trim(),
           prompt_type: mode === 'ui' ? 'generated-ui' : 'chat',
           parent_hash: parentHash,
         }),
@@ -234,7 +278,7 @@ export function SubmitPage() {
 
       const ref = refName.trim()
       const contentHash: string = data.content_hash
-      setRefName(''); setPrompt(''); setCommitMessage('')
+      setRefName(''); setPrompt('')
       setPipeline({ stage: 'submitted', refName: ref })
       setTimeout(() => {
         setPipeline({ stage: 'dev_running', refName: ref })
@@ -343,11 +387,11 @@ export function SubmitPage() {
           <Field id="submit-commit-message" label="What changed?">
             <input
               id="submit-commit-message"
-              className="input"
+              className="input cursor-not-allowed opacity-70"
               required
-              placeholder="e.g. Initial version / Added stricter tone / Fixed hallucination"
-              value={commitMessage}
-              onChange={e => setCommitMessage(e.target.value)}
+              readOnly
+              placeholder="Auto-generated from The Prompt above"
+              value={commitSummary}
             />
           </Field>
 
@@ -366,7 +410,7 @@ export function SubmitPage() {
 
           <button
             type="submit"
-            disabled={loading || !refName.trim() || !prompt.trim() || !commitMessage.trim() || !submittedBy.trim()}
+            disabled={loading || !refName.trim() || !prompt.trim() || !submittedBy.trim()}
             className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             {loading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
