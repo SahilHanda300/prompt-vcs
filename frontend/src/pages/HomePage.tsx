@@ -17,8 +17,6 @@ function HeroIllustration() {
       <rect x="24" y="44" width="288" height="148" rx="14" className="fill-amber-50 dark:fill-amber-950/40" stroke="none" />
       <rect x="24" y="44" width="288" height="148" rx="14" className="stroke-amber-200 dark:stroke-amber-800/50" strokeWidth="1.5" fill="none" />
       <text x="48" y="73" className="fill-gray-500 dark:fill-slate-400" fontSize="11" fontFamily="monospace">v2 · Added stricter tone</text>
-      <rect x="280" y="60" width="16" height="16" rx="8" className="fill-amber-100 dark:fill-amber-900/60" />
-      <circle cx="288" cy="68" r="3" className="fill-amber-400" />
       <rect x="48" y="84" width="140" height="7" rx="3" className="fill-amber-100 dark:fill-amber-900/40" />
       <rect x="48" y="98" width="100" height="7" rx="3" className="fill-amber-100 dark:fill-amber-900/40" />
 
@@ -42,8 +40,8 @@ function HeroIllustration() {
       <text x="112" y="174" className="fill-gray-600 dark:fill-slate-300" fontSize="10">Tell me about pricing</text>
 
       {/* score badge */}
-      <rect x="232" y="91" width="40" height="18" rx="6" className="fill-green-100 dark:fill-green-900/40" />
-      <text x="240" y="104" className="fill-green-700 dark:fill-green-400" fontSize="9" fontWeight="600" fontFamily="monospace">0.94</text>
+      <rect x="232" y="91" width="40" height="18" rx="6" className="fill-emerald-100 dark:fill-emerald-500/20" />
+      <text x="240" y="104" className="fill-emerald-700 dark:fill-emerald-400" fontSize="9" fontWeight="600" fontFamily="monospace">0.94</text>
     </svg>
   )
 }
@@ -106,10 +104,10 @@ export function HomePage() {
   const { isDark, toggle } = useTheme()
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a12] text-gray-900 dark:text-slate-100 overflow-y-auto">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#0d0d14] text-gray-900 dark:text-slate-100 overflow-y-auto">
 
       {/* Nav */}
-      <nav className="sticky top-0 z-20 bg-white/80 dark:bg-[#0a0a12]/80 backdrop-blur border-b border-gray-200 dark:border-white/5">
+      <nav className="sticky top-0 z-20 bg-white/80 dark:bg-[#0d0d14]/80 backdrop-blur border-b border-gray-200 dark:border-white/5">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <span className="font-bold tracking-tight text-gray-900 dark:text-white">PromptVCS</span>
           <div className="flex items-center gap-3">
@@ -145,10 +143,10 @@ export function HomePage() {
       </nav>
 
       {/* Hero */}
-      <section className="max-w-5xl mx-auto px-6 pt-20 pb-16">
+      <section className="max-w-5xl mx-auto px-6 pt-24 pb-20">
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-300 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 text-xs font-semibold tracking-wide mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 text-xs font-semibold tracking-wide mb-6">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
               Now live
             </div>
@@ -190,7 +188,7 @@ export function HomePage() {
       {/* Social proof strip */}
       <section className="border-y border-gray-100 dark:border-white/5 bg-white dark:bg-white/2 py-6">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="flex flex-wrap justify-center gap-8 text-center">
+          <div className="flex flex-wrap justify-center gap-10 sm:gap-14 text-center">
             {[
               { value: '100%', label: 'Automated testing' },
               { value: '< 1s',  label: 'Rollback time' },
@@ -220,7 +218,7 @@ export function HomePage() {
               title: 'Write your AI instructions',
               body: 'Describe how you want your AI assistant to behave. Give it a name and a purpose — like a customer support bot or a writing helper.',
               visual: (
-                <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 p-4">
+                <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-4">
                   <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2">Your instructions</p>
                   <p className="text-xs text-gray-700 dark:text-slate-300 leading-relaxed">
                     "You are a friendly customer support agent for Acme Co. Always greet the user by name and offer to help…"
@@ -233,7 +231,7 @@ export function HomePage() {
               title: 'We test it automatically',
               body: 'As soon as you save a change, PromptVCS runs it through a set of test questions. An AI judge scores the answers. No action needed from you.',
               visual: (
-                <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 p-4 space-y-2">
+                <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-4 space-y-2">
                   {[
                     { q: 'How do I return an item?', ok: true },
                     { q: 'What are your opening hours?', ok: true },
@@ -259,14 +257,14 @@ export function HomePage() {
                     <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">✓</span>
                     <div>
                       <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Update is live</p>
-                      <p className="text-[10px] text-emerald-600/70 dark:text-emerald-500">Your users see the new version now</p>
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-500">Your users see the new version now</p>
                     </div>
                   </div>
                   <div className="rounded-xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-3 flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-red-400 flex items-center justify-center text-white text-[10px] font-bold shrink-0">✗</span>
                     <div>
                       <p className="text-xs font-semibold text-red-700 dark:text-red-400">Update blocked</p>
-                      <p className="text-[10px] text-red-600/70 dark:text-red-500">Answers were worse than before</p>
+                      <p className="text-[10px] text-red-600 dark:text-red-500">Answers were worse than before</p>
                     </div>
                   </div>
                 </div>
@@ -286,7 +284,7 @@ export function HomePage() {
       </section>
 
       {/* Features */}
-      <section className="bg-white dark:bg-white/2 border-y border-gray-100 dark:border-white/5 py-20">
+      <section className="bg-white dark:bg-slate-900/60 border-y border-gray-100 dark:border-white/5 py-20">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
             <p className="text-xs text-gray-400 dark:text-slate-500 uppercase tracking-widest font-semibold mb-2">Features</p>
@@ -318,7 +316,7 @@ export function HomePage() {
             ].map(f => (
               <div
                 key={f.title}
-                className="rounded-xl border border-gray-200 dark:border-white/8 bg-gray-50 dark:bg-white/3 hover:bg-gray-100 dark:hover:bg-white/5 p-5 transition-colors"
+                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 p-5 transition-colors"
               >
                 {f.icon}
                 <p className="text-gray-900 dark:text-white font-semibold text-sm mt-3 mb-1.5">{f.title}</p>
@@ -341,7 +339,7 @@ export function HomePage() {
 
         <div className="grid sm:grid-cols-2 gap-6">
           {/* Without */}
-          <div className="rounded-2xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-6">
+          <div className="rounded-2xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-5">
             <p className="text-xs font-bold uppercase tracking-widest text-red-500 dark:text-red-400 mb-4">Without PromptVCS</p>
             <ul className="space-y-3">
               {[
@@ -360,7 +358,7 @@ export function HomePage() {
           </div>
 
           {/* With */}
-          <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20 p-6">
+          <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20 p-5">
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-4">With PromptVCS</p>
             <ul className="space-y-3">
               {[
@@ -381,11 +379,11 @@ export function HomePage() {
       </section>
 
       {/* CTA */}
-      <section className="bg-indigo-600 dark:bg-indigo-600/90 py-16">
+      <section className="bg-indigo-600 py-16">
         <div className="max-w-5xl mx-auto px-6 text-center">
           <h2 className="text-2xl font-bold text-white mb-3">Ready to take control of your AI?</h2>
           <p className="text-indigo-200 text-sm mb-8">
-            Submit your first AI assistant in under two minutes. No account needed.
+            Sign in and submit your first AI assistant in under two minutes.
           </p>
           <button
             onClick={() => navigate('/login')}
@@ -397,7 +395,7 @@ export function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 dark:border-white/5 py-6 text-center text-xs text-gray-400 dark:text-slate-700">
+      <footer className="border-t border-gray-200 dark:border-white/5 py-6 text-center text-xs text-gray-500 dark:text-slate-500">
         Made by Sahil Handa &copy; 2026 · PromptVCS
       </footer>
     </div>
