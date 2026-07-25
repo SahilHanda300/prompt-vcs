@@ -7,14 +7,15 @@ router = APIRouter(prefix="/complete", tags=["complete"])
 
 _client = Groq(api_key=os.environ["GEMINI_API_KEY"])
 
-_PROMPT = """You are autocompleting a short app description for a no-code app builder. \
-Continue the partial text below with a natural, concise continuation (a few words up to one short sentence). \
-Output ONLY the continuation — the exact text that comes right after the partial text, with no repetition of it, \
-no quotes, no markdown, no explanation. If the partial text already reads as a complete description, output nothing.
+_PROMPT = """Finish this sentence. Stay strictly on the same topic and continue the exact idea \
+being described — do not change subject or introduce anything new. \
+Output ONLY the missing rest of the sentence: the exact text that comes right after what's given, \
+with no repetition of it, no quotes, no markdown, no explanation, and nothing after the sentence ends. \
+If it already reads as a complete sentence, output nothing.
 
-Partial text: "{partial}"
+Sentence so far: "{partial}"
 
-Continuation:"""
+Rest of the sentence:"""
 
 
 @router.post("", response_model=CompleteResponse)
@@ -27,8 +28,9 @@ def complete(body: CompleteRequest) -> CompleteResponse:
         response = _client.chat.completions.create(
             model=os.environ.get("EVAL_MODEL", "llama-3.1-8b-instant"),
             messages=[{"role": "user", "content": _PROMPT.format(partial=text)}],
-            temperature=0.3,
-            max_tokens=40,
+            temperature=0.2,
+            max_tokens=25,
+            stop=["\n", "."],
         )
         completion = (response.choices[0].message.content or "").strip()
     except Exception:
