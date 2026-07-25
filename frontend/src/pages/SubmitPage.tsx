@@ -39,10 +39,11 @@ export function SubmitPage() {
     if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current)
     if (completionAbortRef.current) completionAbortRef.current.abort()
 
-    if (mode !== 'ui' || !prompt.trim()) return
+    if (!prompt.trim()) return
 
     const requestId = completionRequestIdRef.current
     const text = prompt
+    const context = mode === 'ui' ? 'ui-description' : 'chat-prompt'
 
     completionTimeoutRef.current = setTimeout(async () => {
       const controller = new AbortController()
@@ -51,7 +52,7 @@ export function SubmitPage() {
         const res = await fetch(`${API_URL}/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, context }),
           signal: controller.signal,
         })
         if (!res.ok) return
@@ -253,7 +254,7 @@ export function SubmitPage() {
                 }}
               />
             </div>
-            {mode === 'ui' && ghostSuffix && (
+            {ghostSuffix && (
               <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Press Tab to autocomplete</p>
             )}
           </Field>
