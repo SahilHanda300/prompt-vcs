@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { API_URL } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 
+const COMPLETION_DEBOUNCE_MS = 500
+
 type PipelineStage = 'idle' | 'submitted' | 'dev_running' | 'dev_failed' | 'qa_running' | 'prod_failed' | 'live'
 
 interface PipelineState {
@@ -24,6 +26,52 @@ export function SubmitPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollCountRef = useRef(0)
+
+  // Inline "ghost text" completion — an LLM call, debounced as the user types.
+  const [ghostSuffix, setGhostSuffix] = useState('')
+  const completionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const completionAbortRef = useRef<AbortController | null>(null)
+  const completionRequestIdRef = useRef(0)
+
+  useEffect(() => {
+    setGhostSuffix('')
+    completionRequestIdRef.current += 1
+    if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current)
+    if (completionAbortRef.current) completionAbortRef.current.abort()
+
+    if (mode !== 'ui' || !prompt.trim()) return
+
+    const requestId = completionRequestIdRef.current
+    const text = prompt
+
+    completionTimeoutRef.current = setTimeout(async () => {
+      const controller = new AbortController()
+      completionAbortRef.current = controller
+      try {
+        const res = await fetch(`${API_URL}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const data: { completion: string } = await res.json()
+        if (requestId === completionRequestIdRef.current && data.completion) {
+          setGhostSuffix(data.completion)
+        }
+      } catch { /* aborted or network error — no ghost text this round */ }
+    }, COMPLETION_DEBOUNCE_MS)
+
+    return () => {
+      if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current)
+    }
+  }, [mode, prompt])
+
+  function acceptGhostSuggestion() {
+    if (!ghostSuffix) return
+    setPrompt(prompt + ghostSuffix)
+    setGhostSuffix('')
+  }
 
   useEffect(() => () => {
     if (pollRef.current) clearInterval(pollRef.current)
@@ -76,7 +124,8 @@ export function SubmitPage() {
     }, 10_000)
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
     if (!refName.trim() || !prompt.trim() || !commitMessage.trim() || !submittedBy.trim()) return
     setLoading(true)
     setError('')
@@ -143,77 +192,109 @@ export function SubmitPage() {
   const activeSteps = steps.filter(s => s.key.includes(pipeline.stage))
 
   return (
-    <div className="p-8 max-w-xl h-full overflow-y-auto">
-      <h1 className="text-gray-900 dark:text-white font-semibold text-lg mb-6">Submit Prompt</h1>
+    <div className="p-8 max-w-2xl mx-auto h-full overflow-y-auto">
+      <div className="bg-white dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700 rounded-2xl p-8 shadow-sm">
+        <h1 className="text-gray-900 dark:text-white font-semibold text-xl">Generate Your App</h1>
+        <p className="text-gray-500 dark:text-slate-400 text-sm mt-1 mb-6">
+          Pick what you're building and describe it in plain language — we'll automatically test it and roll it out once it's ready.
+        </p>
 
-      <div className="flex gap-1 p-1 bg-gray-100 dark:bg-white/5 rounded mb-6">
-        {(['chat', 'ui'] as const).map(m => (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field id="submit-type" label="Type">
+            <select
+              id="submit-type"
+              className="input"
+              value={mode}
+              onChange={e => { setMode(e.target.value as 'chat' | 'ui'); setPrompt('') }}
+            >
+              <option value="chat">Chat Assistant</option>
+              <option value="ui">Generate UI App</option>
+            </select>
+          </Field>
+
+          <Field id="submit-ref-name" label="Site Name">
+            <input
+              id="submit-ref-name"
+              className="input"
+              required
+              placeholder={mode === 'ui' ? 'e.g. my-calculator' : 'e.g. customer-bot'}
+              value={refName}
+              onChange={e => setRefName(e.target.value)}
+            />
+          </Field>
+
+          <Field id="submit-prompt" label={mode === 'ui' ? 'Describe What to Build' : 'The Prompt'}>
+            <div className="relative w-full bg-gray-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-600 rounded-lg focus-within:border-indigo-500 dark:focus-within:border-indigo-400 transition-colors">
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 px-3 py-2.5 text-sm whitespace-pre-wrap break-words overflow-hidden pointer-events-none font-sans"
+              >
+                <span className="invisible">{prompt}</span>
+                <span className="text-gray-400 dark:text-slate-500">{ghostSuffix}</span>
+              </div>
+
+              <textarea
+                id="submit-prompt"
+                rows={7}
+                className="relative z-10 w-full bg-transparent px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none resize-none"
+                required
+                placeholder={
+                  mode === 'ui'
+                    ? 'e.g. Create a calculator with basic arithmetic operations'
+                    : 'You are a helpful assistant that…'
+                }
+                value={prompt}
+                onChange={e => setPrompt(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Tab' && ghostSuffix) {
+                    e.preventDefault()
+                    acceptGhostSuggestion()
+                  }
+                }}
+              />
+            </div>
+            {mode === 'ui' && ghostSuffix && (
+              <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Press Tab to autocomplete</p>
+            )}
+          </Field>
+
+          <Field id="submit-commit-message" label="What changed?">
+            <input
+              id="submit-commit-message"
+              className="input"
+              required
+              placeholder="e.g. Initial version / Added stricter tone / Fixed hallucination"
+              value={commitMessage}
+              onChange={e => setCommitMessage(e.target.value)}
+            />
+          </Field>
+
+          {error && (
+            <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg px-3 py-2">
+              <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+              </svg>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            </div>
+          )}
+
+          <p className="text-xs text-gray-500 dark:text-slate-500">
+            Submitting as <span className="font-medium text-gray-700 dark:text-slate-300">{submittedBy}</span>
+          </p>
+
           <button
-            key={m}
-            onClick={() => { setMode(m); setPrompt('') }}
-            className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors ${
-              mode === m ? 'bg-indigo-600 text-white' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
+            type="submit"
+            disabled={loading || !refName.trim() || !prompt.trim() || !commitMessage.trim() || !submittedBy.trim()}
+            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
           >
-            {m === 'chat' ? 'Chat Assistant' : 'Generate UI'}
+            {loading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {loading ? 'Submitting…' : 'Trigger Pipeline'}
           </button>
-        ))}
-      </div>
-
-      <div className="space-y-4">
-        <Field label="Site Name">
-          <input
-            className="input"
-            placeholder={mode === 'ui' ? 'e.g. my-calculator' : 'e.g. customer-bot'}
-            value={refName}
-            onChange={e => setRefName(e.target.value)}
-          />
-        </Field>
-
-        <Field label={mode === 'ui' ? 'Describe What to Build' : 'The Prompt'}>
-          <textarea
-            rows={7}
-            className="input resize-none"
-            placeholder={
-              mode === 'ui'
-                ? 'e.g. Create a calculator with basic arithmetic operations'
-                : 'You are a helpful assistant that…'
-            }
-            value={prompt}
-            onChange={e => setPrompt(e.target.value)}
-          />
-        </Field>
-
-        <Field label="What changed?">
-          <input
-            className="input"
-            placeholder="e.g. Initial version / Added stricter tone / Fixed hallucination"
-            value={commitMessage}
-            onChange={e => setCommitMessage(e.target.value)}
-          />
-        </Field>
-
-        <Field label="Submitting as">
-          <input
-            className="input opacity-70 cursor-not-allowed"
-            value={submittedBy}
-            readOnly
-          />
-        </Field>
-
-        {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
-
-        <button
-          onClick={handleSubmit}
-          disabled={loading || !refName.trim() || !prompt.trim() || !commitMessage.trim() || !submittedBy.trim()}
-          className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 text-white text-sm font-medium rounded transition-colors"
-        >
-          {loading ? 'Submitting…' : 'Trigger Pipeline'}
-        </button>
+        </form>
       </div>
 
       {pipeline.stage !== 'idle' && (
-        <div className="mt-8 border-t border-gray-200 dark:border-white/5 pt-6 space-y-3">
+        <div className="mt-6 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/60 p-5 space-y-3">
           {activeSteps.map((s, i) => {
             const isFailed  = s.label.includes('failed')
             const isRunning = s.label.includes('running')
@@ -250,10 +331,10 @@ export function SubmitPage() {
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs text-gray-500 dark:text-slate-500 mb-1.5 uppercase tracking-wider">{label}</label>
+      <label htmlFor={id} className="block text-xs text-gray-500 dark:text-slate-500 mb-1.5 uppercase tracking-wider">{label}</label>
       {children}
     </div>
   )
