@@ -3,6 +3,12 @@ import { API_URL } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 
 const COMPLETION_DEBOUNCE_MS = 500
+// Commit-summary and quality-score aren't something the user is actively
+// waiting on the way ghost-text is — they update quietly in the background.
+// Debouncing them longer means they don't fire (and compete for backend/LLM
+// capacity) on every single typing pause, which was queuing up behind the
+// ghost-text request and making suggestions feel slow to appear.
+const BACKGROUND_DEBOUNCE_MS = 1500
 // Below this length a draft is too thin to bother scoring — avoids firing on
 // "you are a" etc.
 const PROMPT_QUALITY_MIN_LENGTH = 20
@@ -41,6 +47,12 @@ function useGhostCompletion(params: {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const requestIdRef = useRef(0)
+  // Read via ref (not a dependency) so `related` arriving later from its own
+  // separate, independently-debounced request doesn't reset this effect and
+  // chain a second round trip after the first — it just rides along on
+  // whichever request the typing debounce below was already going to fire.
+  const relatedRef = useRef(related)
+  relatedRef.current = related
 
   useEffect(() => {
     setSuffix('')
@@ -60,21 +72,29 @@ function useGhostCompletion(params: {
         const res = await fetch(`${API_URL}/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, context, related }),
+          body: JSON.stringify({ text, context, related: relatedRef.current }),
           signal: controller.signal,
         })
-        if (!res.ok) return
+        if (!res.ok) {
+          console.warn(`[ghost-completion] request failed: ${res.status} ${res.statusText}`, await res.text().catch(() => ''))
+          return
+        }
         const data: { completion: string } = await res.json()
+        console.warn('[ghost-completion] response', JSON.stringify(data.completion))
         if (requestId === requestIdRef.current && data.completion) {
           setSuffix(data.completion)
         }
-      } catch { /* aborted or network error — no ghost text this round */ }
+      } catch (err) {
+        if ((err as Error)?.name !== 'AbortError') {
+          console.warn('[ghost-completion] request errored', err)
+        }
+      }
     }, COMPLETION_DEBOUNCE_MS)
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [enabled, value, context, related, consecutiveAccepts])
+  }, [enabled, value, context, consecutiveAccepts])
 
   function reset() {
     setConsecutiveAccepts(0)
@@ -122,9 +142,14 @@ function useCommitSummary(text: string): string {
         })
         if (!res.ok) return
         const data: { completion: string } = await res.json()
-        if (requestId === requestIdRef.current) setSummary(data.completion)
+        // A blank result here is almost always a transient hiccup (rate
+        // limit, model returned nothing), not a real "no summary" state —
+        // and since this only re-fires when the prompt text itself changes,
+        // applying it would wipe out a good summary with no way to recover
+        // until the user edits the prompt again. Keep the last good value.
+        if (requestId === requestIdRef.current && data.completion) setSummary(data.completion)
       } catch { /* aborted or network error — leave the last summary in place */ }
-    }, COMPLETION_DEBOUNCE_MS)
+    }, BACKGROUND_DEBOUNCE_MS)
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -177,7 +202,7 @@ function usePromptQuality(text: string): PromptQuality | null {
           setQuality({ score: Math.min(Math.max(score, 0), 100), feedback: rest.join('|').trim() })
         }
       } catch { /* aborted or network error — leave the last score in place */ }
-    }, COMPLETION_DEBOUNCE_MS)
+    }, BACKGROUND_DEBOUNCE_MS)
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -223,8 +248,22 @@ export function SubmitPage() {
   // offset only after the browser has finished its own caret-follow scroll.
   function syncPromptGhostScroll() {
     requestAnimationFrame(() => {
-      if (promptTextareaRef.current && promptGhostOverlayRef.current) {
-        promptGhostOverlayRef.current.scrollTop = promptTextareaRef.current.scrollTop
+      const textarea = promptTextareaRef.current
+      const overlay = promptGhostOverlayRef.current
+      if (!textarea || !overlay) return
+
+      overlay.scrollTop = textarea.scrollTop
+
+      // The overlay's mirrored content includes the not-yet-accepted suffix,
+      // so it can be one wrapped line taller than the real textarea's own
+      // content. Copying the textarea's scroll position verbatim then leaves
+      // that extra line sitting just past the visible bottom edge — clipped,
+      // not just unstyled. Nudge both down together so the suggestion is
+      // never rendered somewhere the user can't see it.
+      const overflow = overlay.scrollHeight - overlay.clientHeight - overlay.scrollTop
+      if (overflow > 0) {
+        textarea.scrollTop += overflow
+        overlay.scrollTop += overflow
       }
     })
   }
@@ -398,7 +437,7 @@ export function SubmitPage() {
             />
           </Field>
 
-          <Field id="submit-prompt" label={mode === 'ui' ? 'Describe What to Build' : 'The Prompt'}>
+          <Field id="submit-prompt" label="Describe What to Build">
             <div className={`relative w-full bg-gray-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-600 rounded-lg focus-within:border-indigo-500 dark:focus-within:border-indigo-400 transition-colors ${!refName.trim() ? 'opacity-50' : ''}`}>
               <div
                 ref={promptGhostOverlayRef}
@@ -413,7 +452,7 @@ export function SubmitPage() {
                 id="submit-prompt"
                 ref={promptTextareaRef}
                 rows={7}
-                className="relative z-10 w-full bg-transparent px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none resize-none disabled:cursor-not-allowed"
+                className="relative z-10 w-full bg-transparent px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none resize-none disabled:cursor-not-allowed [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 required
                 disabled={!refName.trim()}
                 placeholder={

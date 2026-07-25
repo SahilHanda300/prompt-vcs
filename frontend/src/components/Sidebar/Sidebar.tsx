@@ -115,7 +115,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
         <div className="space-y-0.5">
           <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-600">Workspace</p>
-          <SideLink to="/submit" onClick={onClose}>Submit Prompt</SideLink>
+          <SideLink to="/submit" onClick={onClose}>Generate App</SideLink>
           <SideLink to="/dashboard" end onClick={onClose}>Overview</SideLink>
           <SideLink to="/dashboard/failures" onClick={onClose}>QA Failures</SideLink>
           <SideLink to="/dashboard/history" onClick={onClose}>History</SideLink>
