@@ -29,33 +29,68 @@ function SideLink({ to, children, end, onClick }: { to: string; children: React.
   )
 }
 
-function ThemeToggle() {
+function ThemeToggle({ compact }: { compact?: boolean }) {
   const { isDark, toggle } = useTheme()
   return (
     <button
       onClick={toggle}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-gray-400 dark:text-slate-600 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+      className={`flex items-center gap-1.5 rounded text-xs text-gray-400 dark:text-slate-600 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors ${compact ? 'p-2' : 'px-2 py-1'}`}
     >
       {isDark ? (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m8.66-9h-1M4.34 12h-1m15.07-6.07-.7.7M6.34 17.66l-.7.7m12.73 0-.7-.7M6.34 6.34l-.7-.7M12 5a7 7 0 1 0 0 14A7 7 0 0 0 12 5z" />
         </svg>
       ) : (
-        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
           <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" />
         </svg>
       )}
-      {isDark ? 'Light' : 'Dark'}
+      {!compact && (isDark ? 'Light' : 'Dark')}
     </button>
+  )
+}
+
+function LogoutButton({ compact }: { compact?: boolean }) {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+
+  return (
+    <button
+      onClick={() => { logout(); navigate('/login') }}
+      title="Sign out"
+      className={`flex items-center gap-1.5 rounded text-xs text-gray-400 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors ${compact ? 'p-2' : 'px-2 py-1'}`}
+    >
+      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1" />
+      </svg>
+      {!compact && 'Logout'}
+    </button>
+  )
+}
+
+export function DesktopTopBar() {
+  return (
+    <div className="hidden md:flex items-center gap-1 fixed top-3 right-4 z-40">
+      <ThemeToggle />
+      <LogoutButton />
+    </div>
+  )
+}
+
+export function MobileTopBarControls() {
+  return (
+    <div className="flex items-center gap-1 ml-auto">
+      <ThemeToggle compact />
+      <LogoutButton compact />
+    </div>
   )
 }
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { data: sites } = usePRODSites()
   const location = useLocation()
-  const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
 
   useEffect(() => {
     onClose()
@@ -120,7 +155,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
       </nav>
 
-      {/* User + controls footer */}
+      {/* User footer */}
       <div className="px-3 py-3 border-t border-gray-100 dark:border-white/5 space-y-2">
         {user && (
           <div className="flex items-center gap-2 px-1">
@@ -131,21 +166,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <p className="text-xs font-medium text-gray-800 dark:text-slate-200 truncate">{user.name}</p>
               <p className="text-[10px] text-gray-400 dark:text-slate-600 truncate">@{user.username}</p>
             </div>
-            <button
-              onClick={() => { logout(); navigate('/login') }}
-              title="Sign out"
-              className="text-gray-400 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 transition-colors shrink-0"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1" />
-              </svg>
-            </button>
           </div>
         )}
-        <div className="flex items-center justify-between px-1">
-          <p className="text-[10px] text-gray-300 dark:text-slate-700">Made by Sahil Handa &copy; 2026</p>
-          <ThemeToggle />
-        </div>
+        <p className="px-1 text-[10px] text-gray-300 dark:text-slate-700">Made by Sahil Handa &copy; 2026</p>
       </div>
     </aside>
   )

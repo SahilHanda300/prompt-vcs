@@ -3,6 +3,9 @@ import { API_URL } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 
 const COMPLETION_DEBOUNCE_MS = 500
+// Below this length a draft is too thin to bother scoring — avoids firing on
+// "you are a" etc.
+const PROMPT_QUALITY_MIN_LENGTH = 20
 // Each accepted suggestion feeds a longer prompt into the next completion
 // call, and with nothing new from the user to ground it, chained accepts
 // drift further off-topic the longer the chain runs. Cap it, and require a
@@ -131,6 +134,59 @@ function useCommitSummary(text: string): string {
   return summary
 }
 
+interface PromptQuality {
+  score: number
+  feedback: string
+}
+
+// Live "is this prompt good enough?" indicator — an AI-estimated confidence
+// score (not a guaranteed pass predictor), so it works from the very first
+// draft of a brand-new site, before any test dataset exists. Uses the same
+// debounced /complete endpoint as the other inline-assist features.
+function usePromptQuality(text: string): PromptQuality | null {
+  const [quality, setQuality] = useState<PromptQuality | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const requestIdRef = useRef(0)
+
+  useEffect(() => {
+    requestIdRef.current += 1
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    if (abortRef.current) abortRef.current.abort()
+
+    const trimmed = text.trim()
+    if (trimmed.length < PROMPT_QUALITY_MIN_LENGTH) { setQuality(null); return }
+
+    const requestId = requestIdRef.current
+
+    timeoutRef.current = setTimeout(async () => {
+      const controller = new AbortController()
+      abortRef.current = controller
+      try {
+        const res = await fetch(`${API_URL}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: trimmed, context: 'prompt-quality' }),
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const data: { completion: string } = await res.json()
+        const [scoreRaw, ...rest] = data.completion.split('|')
+        const score = Number.parseInt(scoreRaw, 10)
+        if (requestId === requestIdRef.current && !Number.isNaN(score)) {
+          setQuality({ score: Math.min(Math.max(score, 0), 100), feedback: rest.join('|').trim() })
+        }
+      } catch { /* aborted or network error — leave the last score in place */ }
+    }, COMPLETION_DEBOUNCE_MS)
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [text])
+
+  return quality
+}
+
 export function SubmitPage() {
   const { user } = useAuth()
   const [mode, setMode] = useState<'chat' | 'ui'>('chat')
@@ -156,6 +212,7 @@ export function SubmitPage() {
   })
 
   const commitSummary = useCommitSummary(prompt)
+  const promptQuality = usePromptQuality(prompt)
 
   // Keep the ghost overlay's scroll position in sync with the real textarea —
   // otherwise once content grows past the visible area and the field
@@ -382,6 +439,24 @@ export function SubmitPage() {
             {!promptGhost.suffix && prompt.trim() && promptGhost.capped && (
               <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Keep typing to get more suggestions</p>
             )}
+
+            {promptQuality && (
+              <div className="mt-2">
+                <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      promptQuality.score >= 70 ? 'bg-emerald-500' : promptQuality.score >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${promptQuality.score}%` }}
+                  />
+                </div>
+                <p className={`mt-1 text-xs ${
+                  promptQuality.score >= 70 ? 'text-emerald-600 dark:text-emerald-400' : promptQuality.score >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-500 dark:text-red-400'
+                }`}>
+                  {promptQuality.score}% ready — {promptQuality.feedback}
+                </p>
+              </div>
+            )}
           </Field>
 
           <Field id="submit-commit-message" label="What changed?">
@@ -390,7 +465,7 @@ export function SubmitPage() {
               className="input cursor-not-allowed opacity-70"
               required
               readOnly
-              placeholder="Auto-generated from The Prompt above"
+              placeholder="The Change..."
               value={commitSummary}
             />
           </Field>
@@ -414,7 +489,7 @@ export function SubmitPage() {
             className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             {loading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-            {loading ? 'Submitting…' : 'Trigger Pipeline'}
+            {loading ? 'Submitting…' : 'Create your App'}
           </button>
         </form>
       </div>

@@ -65,6 +65,35 @@ def _complete_commit_summary(text: str) -> CompleteResponse:
     completion = " ".join(completion.split()[:_MAX_SUMMARY_WORDS])
     return CompleteResponse(completion=completion)
 
+_PROMPT_QUALITY_PROMPT = """You are assessing a draft AI prompt before it's submitted and tested — judge how \
+likely it is to produce clear, correct, on-topic responses once evaluated, based only on how well-specified \
+the instructions are (clarity, specificity, completeness). This may be a chat assistant's system prompt or a \
+description of a UI app to generate — judge either kind on the same criteria.
+
+Reply in EXACTLY this format and nothing else, one line, no markdown:
+SCORE|one short sentence of feedback (max 12 words)
+
+Prompt:
+\"\"\"{text}\"\"\"
+
+Reply:"""
+
+
+def _complete_prompt_quality(text: str) -> CompleteResponse:
+    try:
+        response = _client.chat.completions.create(
+            model=os.environ.get("EVAL_MODEL", "llama-3.1-8b-instant"),
+            messages=[{"role": "user", "content": _PROMPT_QUALITY_PROMPT.format(text=text)}],
+            temperature=0.2,
+            max_tokens=40,
+            stop=["\n"],
+        )
+        completion = (response.choices[0].message.content or "").strip()
+    except Exception:
+        return CompleteResponse(completion="")
+
+    return CompleteResponse(completion=completion)
+
 _PROMPT = """Finish this sentence. {hint}
 Stay strictly on the same topic and continue the exact idea being described — do not change subject or introduce anything new. \
 Keep it VERY short: at most 3-4 words, a single short phrase — never a list, never multiple clauses joined by commas or "and"/"as well as". \
@@ -84,6 +113,9 @@ def complete(body: CompleteRequest) -> CompleteResponse:
 
     if body.context == "commit-summary":
         return _complete_commit_summary(text)
+
+    if body.context == "prompt-quality":
+        return _complete_prompt_quality(text)
 
     hint = _CONTEXT_HINTS.get(body.context or "", "")
 
