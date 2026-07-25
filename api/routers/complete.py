@@ -35,6 +35,27 @@ def _trim_to_understandable_end(completion: str) -> str:
         words.pop()
     return " ".join(words)
 
+
+def _normalize_word(word: str) -> str:
+    return word.strip(",.;:!?\"'").lower()
+
+
+# The model is asked not to repeat what's already typed, but small models
+# don't reliably follow that — e.g. typing "...at all times" can get back a
+# suggestion of "at all times", which visibly duplicates the phrase once
+# accepted. Strip any words at the start of the suggestion that just echo the
+# end of what's already there, longest overlap first.
+def _strip_echoed_prefix(partial: str, completion: str) -> str:
+    partial_words = [_normalize_word(w) for w in partial.split()]
+    completion_words = completion.split()
+    completion_words_norm = [_normalize_word(w) for w in completion_words]
+
+    max_overlap = min(len(partial_words), len(completion_words_norm))
+    for overlap in range(max_overlap, 0, -1):
+        if partial_words[-overlap:] == completion_words_norm[:overlap]:
+            return " ".join(completion_words[overlap:])
+    return completion
+
 _MAX_SUMMARY_WORDS = 5
 
 _COMMIT_SUMMARY_PROMPT = """Read the following AI prompt / system instructions and write a short \
@@ -142,6 +163,7 @@ def complete(body: CompleteRequest) -> CompleteResponse:
         return CompleteResponse(completion="")
 
     completion = completion.strip('"').strip("'")
+    completion = _strip_echoed_prefix(text, completion)
     # Hard cap regardless of what the model actually returned — the prompt
     # asks for 3-4 words but generation length isn't guaranteed to comply —
     # then trim any trailing filler word so it ends on an understandable note.

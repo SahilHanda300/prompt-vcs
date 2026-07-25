@@ -440,24 +440,6 @@ export function SubmitPage() {
             {!promptGhost.suffix && prompt.trim() && promptGhost.capped && (
               <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Keep typing to get more suggestions</p>
             )}
-
-            {promptQuality && (
-              <div className="mt-2">
-                <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      promptQuality.score >= 70 ? 'bg-emerald-500' : promptQuality.score >= 40 ? 'bg-amber-500' : 'bg-red-500'
-                    }`}
-                    style={{ width: `${promptQuality.score}%` }}
-                  />
-                </div>
-                <p className={`mt-1 text-xs ${
-                  promptQuality.score >= 70 ? 'text-emerald-600 dark:text-emerald-400' : promptQuality.score >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-500 dark:text-red-400'
-                }`}>
-                  {promptQuality.score}% ready — {promptQuality.feedback}
-                </p>
-              </div>
-            )}
           </Field>
 
           <Field id="submit-commit-message" label="What changed?">
