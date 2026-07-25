@@ -17,6 +17,81 @@ interface PipelineState {
   reason?: string
 }
 
+function joinWithSpace(value: string, suffix: string): string {
+  const needsSpace = value.length > 0 && !/\s$/.test(value) && !/^[\s.,!?;:]/.test(suffix)
+  return value + (needsSpace ? ' ' : '') + suffix
+}
+
+function joinDirect(value: string, suffix: string): string {
+  return value + suffix
+}
+
+// Shared inline "ghost text" completion — an LLM call, debounced as the user
+// types, with a cap on how many suggestions can be chained via Tab in a row
+// without any new manually-typed input (see MAX_CONSECUTIVE_GHOST_ACCEPTS).
+function useGhostCompletion(params: {
+  value: string
+  enabled: boolean
+  context: string
+  related?: string
+  join: (value: string, suffix: string) => string
+}) {
+  const { value, enabled, context, related, join } = params
+  const [suffix, setSuffix] = useState('')
+  const [consecutiveAccepts, setConsecutiveAccepts] = useState(0)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const requestIdRef = useRef(0)
+
+  useEffect(() => {
+    setSuffix('')
+    requestIdRef.current += 1
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    if (abortRef.current) abortRef.current.abort()
+
+    if (!enabled || !value.trim() || consecutiveAccepts >= MAX_CONSECUTIVE_GHOST_ACCEPTS) return
+
+    const requestId = requestIdRef.current
+    const text = value
+
+    timeoutRef.current = setTimeout(async () => {
+      const controller = new AbortController()
+      abortRef.current = controller
+      try {
+        const res = await fetch(`${API_URL}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, context, related }),
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const data: { completion: string } = await res.json()
+        if (requestId === requestIdRef.current && data.completion) {
+          setSuffix(data.completion)
+        }
+      } catch { /* aborted or network error — no ghost text this round */ }
+    }, COMPLETION_DEBOUNCE_MS)
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [enabled, value, context, related, consecutiveAccepts])
+
+  function reset() {
+    setConsecutiveAccepts(0)
+  }
+
+  function accept(): string | null {
+    if (!suffix) return null
+    const next = join(value, suffix)
+    setSuffix('')
+    setConsecutiveAccepts(n => n + 1)
+    return next
+  }
+
+  return { suffix, accept, reset, capped: consecutiveAccepts >= MAX_CONSECUTIVE_GHOST_ACCEPTS }
+}
+
 export function SubmitPage() {
   const { user } = useAuth()
   const [mode, setMode] = useState<'chat' | 'ui'>('chat')
@@ -32,82 +107,79 @@ export function SubmitPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollCountRef = useRef(0)
 
-  // Inline "ghost text" completion — an LLM call, debounced as the user types.
-  const [ghostSuffix, setGhostSuffix] = useState('')
-  const [consecutiveAccepts, setConsecutiveAccepts] = useState(0)
-  const completionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const completionAbortRef = useRef<AbortController | null>(null)
-  const completionRequestIdRef = useRef(0)
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
-  const ghostOverlayRef = useRef<HTMLDivElement>(null)
+  const promptGhostOverlayRef = useRef<HTMLDivElement>(null)
+  const refNameInputRef = useRef<HTMLInputElement>(null)
+  const refNameGhostOverlayRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    setGhostSuffix('')
-    completionRequestIdRef.current += 1
-    if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current)
-    if (completionAbortRef.current) completionAbortRef.current.abort()
+  const promptGhost = useGhostCompletion({
+    value: prompt,
+    enabled: !!refName.trim(),
+    context: mode === 'ui' ? 'ui-description' : 'chat-prompt',
+    join: joinWithSpace,
+  })
 
-    if (!prompt.trim() || consecutiveAccepts >= MAX_CONSECUTIVE_GHOST_ACCEPTS) return
+  const refNameGhost = useGhostCompletion({
+    value: refName,
+    enabled: true,
+    context: 'site-name',
+    related: prompt.trim() || undefined,
+    join: joinDirect,
+  })
 
-    const requestId = completionRequestIdRef.current
-    const text = prompt
-    const context = mode === 'ui' ? 'ui-description' : 'chat-prompt'
-
-    completionTimeoutRef.current = setTimeout(async () => {
-      const controller = new AbortController()
-      completionAbortRef.current = controller
-      try {
-        const res = await fetch(`${API_URL}/complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, context }),
-          signal: controller.signal,
-        })
-        if (!res.ok) return
-        const data: { completion: string } = await res.json()
-        if (requestId === completionRequestIdRef.current && data.completion) {
-          setGhostSuffix(data.completion)
-        }
-      } catch { /* aborted or network error — no ghost text this round */ }
-    }, COMPLETION_DEBOUNCE_MS)
-
-    return () => {
-      if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current)
-    }
-  }, [mode, prompt, consecutiveAccepts])
-
-  // Keep the ghost overlay's scroll position in sync with the real textarea —
-  // otherwise once the text grows past the visible rows and the textarea
+  // Keep each ghost overlay's scroll position in sync with its real field —
+  // otherwise once content grows past the visible area and the field
   // auto-scrolls, the overlay (a separate absolutely-positioned element)
-  // stays put and the ghost text renders overlapping already-typed lines.
-  // requestAnimationFrame (not a plain effect) so this reads scrollTop only
-  // after the browser has finished its own caret-follow auto-scroll.
-  function syncGhostScroll() {
+  // stays put and the ghost text renders overlapping already-typed content.
+  // requestAnimationFrame (not a plain effect) so this reads the scroll
+  // offset only after the browser has finished its own caret-follow scroll.
+  function syncPromptGhostScroll() {
     requestAnimationFrame(() => {
-      if (promptTextareaRef.current && ghostOverlayRef.current) {
-        ghostOverlayRef.current.scrollTop = promptTextareaRef.current.scrollTop
+      if (promptTextareaRef.current && promptGhostOverlayRef.current) {
+        promptGhostOverlayRef.current.scrollTop = promptTextareaRef.current.scrollTop
       }
     })
   }
 
-  useEffect(syncGhostScroll, [prompt, ghostSuffix])
+  function syncRefNameGhostScroll() {
+    requestAnimationFrame(() => {
+      if (refNameInputRef.current && refNameGhostOverlayRef.current) {
+        refNameGhostOverlayRef.current.scrollLeft = refNameInputRef.current.scrollLeft
+      }
+    })
+  }
 
-  function acceptGhostSuggestion() {
-    if (!ghostSuffix) return
-    const needsSpace = prompt.length > 0 && !/\s$/.test(prompt) && !/^[\s.,!?;:]/.test(ghostSuffix)
-    const nextPrompt = prompt + (needsSpace ? ' ' : '') + ghostSuffix
-    setPrompt(nextPrompt)
-    setGhostSuffix('')
-    setConsecutiveAccepts(n => n + 1)
-    // Move the caret to the end of the newly-accepted text so typing
-    // continues after it, not from the old (now mid-string) cursor spot.
+  useEffect(syncPromptGhostScroll, [prompt, promptGhost.suffix])
+  useEffect(syncRefNameGhostScroll, [refName, refNameGhost.suffix])
+
+  // Move the caret to the end of the newly-accepted text after accepting a
+  // suggestion, so typing continues after it, not from the old (now
+  // mid-string) cursor spot.
+  function acceptPromptGhost() {
+    const next = promptGhost.accept()
+    if (next === null) return
+    setPrompt(next)
     requestAnimationFrame(() => {
       const el = promptTextareaRef.current
       if (el) {
-        el.selectionStart = el.selectionEnd = nextPrompt.length
+        el.selectionStart = el.selectionEnd = next.length
         el.scrollTop = el.scrollHeight
       }
-      syncGhostScroll()
+      syncPromptGhostScroll()
+    })
+  }
+
+  function acceptRefNameGhost() {
+    const next = refNameGhost.accept()
+    if (next === null) return
+    setRefName(next)
+    requestAnimationFrame(() => {
+      const el = refNameInputRef.current
+      if (el) {
+        el.selectionStart = el.selectionEnd = next.length
+        el.scrollLeft = el.scrollWidth
+      }
+      syncRefNameGhostScroll()
     })
   }
 
@@ -251,53 +323,78 @@ export function SubmitPage() {
           </Field>
 
           <Field id="submit-ref-name" label="Site Name">
-            <input
-              id="submit-ref-name"
-              className="input"
-              required
-              placeholder={mode === 'ui' ? 'e.g. my-calculator' : 'e.g. customer-bot'}
-              value={refName}
-              onChange={e => setRefName(e.target.value)}
-            />
+            <div className="relative w-full bg-gray-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-600 rounded-lg focus-within:border-indigo-500 dark:focus-within:border-indigo-400 transition-colors">
+              <div
+                ref={refNameGhostOverlayRef}
+                aria-hidden="true"
+                className="absolute inset-0 px-3 py-2.5 text-sm whitespace-pre overflow-hidden pointer-events-none"
+              >
+                <span className="invisible">{refName}</span>
+                <span className="text-gray-400 dark:text-slate-500">{refNameGhost.suffix}</span>
+              </div>
+
+              <input
+                id="submit-ref-name"
+                ref={refNameInputRef}
+                className="relative z-10 w-full bg-transparent px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
+                required
+                placeholder={mode === 'ui' ? 'e.g. my-calculator' : 'e.g. customer-bot'}
+                value={refName}
+                onChange={e => { setRefName(e.target.value); refNameGhost.reset() }}
+                onScroll={syncRefNameGhostScroll}
+                onKeyDown={e => {
+                  if (e.key === 'Tab' && refNameGhost.suffix) {
+                    e.preventDefault()
+                    acceptRefNameGhost()
+                  }
+                }}
+              />
+            </div>
+            {refNameGhost.suffix && (
+              <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Press Tab to autocomplete</p>
+            )}
           </Field>
 
           <Field id="submit-prompt" label={mode === 'ui' ? 'Describe What to Build' : 'The Prompt'}>
-            <div className="relative w-full bg-gray-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-600 rounded-lg focus-within:border-indigo-500 dark:focus-within:border-indigo-400 transition-colors">
+            <div className={`relative w-full bg-gray-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-600 rounded-lg focus-within:border-indigo-500 dark:focus-within:border-indigo-400 transition-colors ${!refName.trim() ? 'opacity-50' : ''}`}>
               <div
-                ref={ghostOverlayRef}
+                ref={promptGhostOverlayRef}
                 aria-hidden="true"
-                className="absolute inset-0 px-3 py-2.5 text-sm whitespace-pre-wrap break-words overflow-hidden pointer-events-none font-sans"
+                className="absolute inset-0 px-3 py-2.5 text-sm whitespace-pre-wrap break-words overflow-hidden pointer-events-none"
               >
                 <span className="invisible">{prompt}</span>
-                <span className="text-gray-400 dark:text-slate-500">{ghostSuffix}</span>
+                <span className="text-gray-400 dark:text-slate-500">{promptGhost.suffix}</span>
               </div>
 
               <textarea
                 id="submit-prompt"
                 ref={promptTextareaRef}
                 rows={7}
-                className="relative z-10 w-full bg-transparent px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none resize-none"
+                className="relative z-10 w-full bg-transparent px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none resize-none disabled:cursor-not-allowed"
                 required
+                disabled={!refName.trim()}
                 placeholder={
-                  mode === 'ui'
-                    ? 'e.g. Create a calculator with basic arithmetic operations'
-                    : 'You are a helpful assistant that…'
+                  !refName.trim()
+                    ? 'Enter a Site Name first…'
+                    : mode === 'ui'
+                      ? 'e.g. Create a calculator with basic arithmetic operations'
+                      : 'You are a helpful assistant that…'
                 }
                 value={prompt}
-                onChange={e => { setPrompt(e.target.value); setConsecutiveAccepts(0) }}
-                onScroll={syncGhostScroll}
+                onChange={e => { setPrompt(e.target.value); promptGhost.reset() }}
+                onScroll={syncPromptGhostScroll}
                 onKeyDown={e => {
-                  if (e.key === 'Tab' && ghostSuffix) {
+                  if (e.key === 'Tab' && promptGhost.suffix) {
                     e.preventDefault()
-                    acceptGhostSuggestion()
+                    acceptPromptGhost()
                   }
                 }}
               />
             </div>
-            {ghostSuffix && (
+            {promptGhost.suffix && (
               <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Press Tab to autocomplete</p>
             )}
-            {!ghostSuffix && prompt.trim() && consecutiveAccepts >= MAX_CONSECUTIVE_GHOST_ACCEPTS && (
+            {!promptGhost.suffix && prompt.trim() && promptGhost.capped && (
               <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Keep typing to get more suggestions</p>
             )}
           </Field>
