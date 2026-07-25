@@ -1,5 +1,4 @@
 import os
-import re
 from fastapi import APIRouter
 from groq import Groq
 from models.complete import CompleteRequest, CompleteResponse
@@ -47,55 +46,11 @@ Sentence so far: "{partial}"
 
 Rest of the sentence (3-4 words max):"""
 
-_SITE_NAME_PROMPT = """You are completing a short site identifier (lowercase words separated by hyphens, e.g. "my-calculator" \
-or "customer-support-bot" — no spaces, no sentences). {app_hint}\
-Continue the partial identifier below with a short, sensible continuation (1-3 words, hyphen-separated, nothing after it). \
-Output ONLY the missing rest of the identifier — the exact characters that come right after what's given, \
-no repetition of it, no quotes, no explanation. If it already reads as a complete, sensible name, output nothing.
-
-Partial identifier: "{partial}"
-
-Rest of the identifier:"""
-
-_SLUG_DISALLOWED_RE = re.compile(r"[^a-z0-9-]")
-_SLUG_REPEAT_HYPHEN_RE = re.compile(r"-{2,}")
-_MAX_SLUG_COMPLETION_LEN = 24
-
-
-def _sanitize_slug_completion(completion: str) -> str:
-    text = completion.strip().lower().split("\n")[0]
-    text = text.replace(" ", "-").replace("_", "-")
-    text = _SLUG_DISALLOWED_RE.sub("", text)
-    text = _SLUG_REPEAT_HYPHEN_RE.sub("-", text)
-    return text[:_MAX_SLUG_COMPLETION_LEN].strip("-")
-
-
-def _complete_site_name(text: str, related: str | None) -> CompleteResponse:
-    app_hint = f'The app being built is described as: "{related.strip()}". ' if related and related.strip() else ""
-
-    try:
-        response = _client.chat.completions.create(
-            model=os.environ.get("EVAL_MODEL", "llama-3.1-8b-instant"),
-            messages=[{"role": "user", "content": _SITE_NAME_PROMPT.format(app_hint=app_hint, partial=text)}],
-            temperature=0.3,
-            max_tokens=10,
-            stop=["\n"],
-        )
-        completion = (response.choices[0].message.content or "").strip()
-    except Exception:
-        return CompleteResponse(completion="")
-
-    return CompleteResponse(completion=_sanitize_slug_completion(completion))
-
-
 @router.post("", response_model=CompleteResponse)
 def complete(body: CompleteRequest) -> CompleteResponse:
     text = body.text.strip()
     if not text:
         return CompleteResponse(completion="")
-
-    if body.context == "site-name":
-        return _complete_site_name(text, body.related)
 
     hint = _CONTEXT_HINTS.get(body.context or "", "")
 

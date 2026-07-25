@@ -22,10 +22,6 @@ function joinWithSpace(value: string, suffix: string): string {
   return value + (needsSpace ? ' ' : '') + suffix
 }
 
-function joinDirect(value: string, suffix: string): string {
-  return value + suffix
-}
-
 // Shared inline "ghost text" completion — an LLM call, debounced as the user
 // types, with a cap on how many suggestions can be chained via Tab in a row
 // without any new manually-typed input (see MAX_CONSECUTIVE_GHOST_ACCEPTS).
@@ -109,8 +105,6 @@ export function SubmitPage() {
 
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
   const promptGhostOverlayRef = useRef<HTMLDivElement>(null)
-  const refNameInputRef = useRef<HTMLInputElement>(null)
-  const refNameGhostOverlayRef = useRef<HTMLDivElement>(null)
 
   const promptGhost = useGhostCompletion({
     value: prompt,
@@ -119,15 +113,7 @@ export function SubmitPage() {
     join: joinWithSpace,
   })
 
-  const refNameGhost = useGhostCompletion({
-    value: refName,
-    enabled: true,
-    context: 'site-name',
-    related: prompt.trim() || undefined,
-    join: joinDirect,
-  })
-
-  // Keep each ghost overlay's scroll position in sync with its real field —
+  // Keep the ghost overlay's scroll position in sync with the real textarea —
   // otherwise once content grows past the visible area and the field
   // auto-scrolls, the overlay (a separate absolutely-positioned element)
   // stays put and the ghost text renders overlapping already-typed content.
@@ -141,16 +127,7 @@ export function SubmitPage() {
     })
   }
 
-  function syncRefNameGhostScroll() {
-    requestAnimationFrame(() => {
-      if (refNameInputRef.current && refNameGhostOverlayRef.current) {
-        refNameGhostOverlayRef.current.scrollLeft = refNameInputRef.current.scrollLeft
-      }
-    })
-  }
-
   useEffect(syncPromptGhostScroll, [prompt, promptGhost.suffix])
-  useEffect(syncRefNameGhostScroll, [refName, refNameGhost.suffix])
 
   // Move the caret to the end of the newly-accepted text after accepting a
   // suggestion, so typing continues after it, not from the old (now
@@ -166,20 +143,6 @@ export function SubmitPage() {
         el.scrollTop = el.scrollHeight
       }
       syncPromptGhostScroll()
-    })
-  }
-
-  function acceptRefNameGhost() {
-    const next = refNameGhost.accept()
-    if (next === null) return
-    setRefName(next)
-    requestAnimationFrame(() => {
-      const el = refNameInputRef.current
-      if (el) {
-        el.selectionStart = el.selectionEnd = next.length
-        el.scrollLeft = el.scrollWidth
-      }
-      syncRefNameGhostScroll()
     })
   }
 
@@ -323,36 +286,14 @@ export function SubmitPage() {
           </Field>
 
           <Field id="submit-ref-name" label="Site Name">
-            <div className="relative w-full bg-gray-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-600 rounded-lg focus-within:border-indigo-500 dark:focus-within:border-indigo-400 transition-colors">
-              <div
-                ref={refNameGhostOverlayRef}
-                aria-hidden="true"
-                className="absolute inset-0 px-3 py-2.5 text-sm whitespace-pre overflow-hidden pointer-events-none"
-              >
-                <span className="invisible">{refName}</span>
-                <span className="text-gray-400 dark:text-slate-500">{refNameGhost.suffix}</span>
-              </div>
-
-              <input
-                id="submit-ref-name"
-                ref={refNameInputRef}
-                className="relative z-10 w-full bg-transparent px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none"
-                required
-                placeholder={mode === 'ui' ? 'e.g. my-calculator' : 'e.g. customer-bot'}
-                value={refName}
-                onChange={e => { setRefName(e.target.value); refNameGhost.reset() }}
-                onScroll={syncRefNameGhostScroll}
-                onKeyDown={e => {
-                  if (e.key === 'Tab' && refNameGhost.suffix) {
-                    e.preventDefault()
-                    acceptRefNameGhost()
-                  }
-                }}
-              />
-            </div>
-            {refNameGhost.suffix && (
-              <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Press Tab to autocomplete</p>
-            )}
+            <input
+              id="submit-ref-name"
+              className="input"
+              required
+              placeholder={mode === 'ui' ? 'e.g. my-calculator' : 'e.g. customer-bot'}
+              value={refName}
+              onChange={e => setRefName(e.target.value)}
+            />
           </Field>
 
           <Field id="submit-prompt" label={mode === 'ui' ? 'Describe What to Build' : 'The Prompt'}>
