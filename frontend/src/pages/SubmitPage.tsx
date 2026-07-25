@@ -204,15 +204,16 @@ export function SubmitPage() {
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
   const promptGhostOverlayRef = useRef<HTMLDivElement>(null)
 
+  const commitSummary = useCommitSummary(prompt)
+  const promptQuality = usePromptQuality(prompt)
+
   const promptGhost = useGhostCompletion({
     value: prompt,
     enabled: !!refName.trim(),
     context: mode === 'ui' ? 'ui-description' : 'chat-prompt',
+    related: promptQuality && promptQuality.score < 70 ? promptQuality.feedback : undefined,
     join: joinWithSpace,
   })
-
-  const commitSummary = useCommitSummary(prompt)
-  const promptQuality = usePromptQuality(prompt)
 
   // Keep the ghost overlay's scroll position in sync with the real textarea —
   // otherwise once content grows past the visible area and the field

@@ -100,10 +100,19 @@ Keep it VERY short: at most 3-4 words, a single short phrase — never a list, n
 Output ONLY the missing rest of the sentence: the exact text that comes right after what's given, \
 with no repetition of it, no quotes, no markdown, no explanation, and nothing after the sentence ends. \
 If it already reads as a complete sentence, output nothing.
-
+{gap_hint}
 Sentence so far: "{partial}"
 
 Rest of the sentence (3-4 words max):"""
+
+# When the caller passes along the current quality-score feedback (the thing
+# a reviewer said is still missing), fold it in so the suggestion closes that
+# specific gap instead of just extending the sentence generically — that's
+# what makes accepting suggestions actually move the readiness score, rather
+# than giving the user endless generic text to tab through.
+_GAP_HINT = 'A reviewer said this prompt still needs: "{related}". ' \
+    "If the next few words can address that, prefer that direction — otherwise continue naturally.\n"
+
 
 @router.post("", response_model=CompleteResponse)
 def complete(body: CompleteRequest) -> CompleteResponse:
@@ -118,11 +127,12 @@ def complete(body: CompleteRequest) -> CompleteResponse:
         return _complete_prompt_quality(text)
 
     hint = _CONTEXT_HINTS.get(body.context or "", "")
+    gap_hint = _GAP_HINT.format(related=body.related.strip()) if body.related and body.related.strip() else ""
 
     try:
         response = _client.chat.completions.create(
             model=os.environ.get("EVAL_MODEL", "llama-3.1-8b-instant"),
-            messages=[{"role": "user", "content": _PROMPT.format(hint=hint, partial=text)}],
+            messages=[{"role": "user", "content": _PROMPT.format(hint=hint, partial=text, gap_hint=gap_hint)}],
             temperature=0.2,
             max_tokens=8,
             stop=["\n", "."],
