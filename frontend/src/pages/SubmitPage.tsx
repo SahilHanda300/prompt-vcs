@@ -3,6 +3,11 @@ import { API_URL } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 
 const COMPLETION_DEBOUNCE_MS = 500
+// Each accepted suggestion feeds a longer prompt into the next completion
+// call, and with nothing new from the user to ground it, chained accepts
+// drift further off-topic the longer the chain runs. Cap it, and require a
+// manual keystroke to reset the count before offering more.
+const MAX_CONSECUTIVE_GHOST_ACCEPTS = 3
 
 type PipelineStage = 'idle' | 'submitted' | 'dev_running' | 'dev_failed' | 'qa_running' | 'prod_failed' | 'live'
 
@@ -29,9 +34,12 @@ export function SubmitPage() {
 
   // Inline "ghost text" completion — an LLM call, debounced as the user types.
   const [ghostSuffix, setGhostSuffix] = useState('')
+  const [consecutiveAccepts, setConsecutiveAccepts] = useState(0)
   const completionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const completionAbortRef = useRef<AbortController | null>(null)
   const completionRequestIdRef = useRef(0)
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const ghostOverlayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setGhostSuffix('')
@@ -39,7 +47,7 @@ export function SubmitPage() {
     if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current)
     if (completionAbortRef.current) completionAbortRef.current.abort()
 
-    if (!prompt.trim()) return
+    if (!prompt.trim() || consecutiveAccepts >= MAX_CONSECUTIVE_GHOST_ACCEPTS) return
 
     const requestId = completionRequestIdRef.current
     const text = prompt
@@ -66,12 +74,41 @@ export function SubmitPage() {
     return () => {
       if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current)
     }
-  }, [mode, prompt])
+  }, [mode, prompt, consecutiveAccepts])
+
+  // Keep the ghost overlay's scroll position in sync with the real textarea —
+  // otherwise once the text grows past the visible rows and the textarea
+  // auto-scrolls, the overlay (a separate absolutely-positioned element)
+  // stays put and the ghost text renders overlapping already-typed lines.
+  // requestAnimationFrame (not a plain effect) so this reads scrollTop only
+  // after the browser has finished its own caret-follow auto-scroll.
+  function syncGhostScroll() {
+    requestAnimationFrame(() => {
+      if (promptTextareaRef.current && ghostOverlayRef.current) {
+        ghostOverlayRef.current.scrollTop = promptTextareaRef.current.scrollTop
+      }
+    })
+  }
+
+  useEffect(syncGhostScroll, [prompt, ghostSuffix])
 
   function acceptGhostSuggestion() {
     if (!ghostSuffix) return
-    setPrompt(prompt + ghostSuffix)
+    const needsSpace = prompt.length > 0 && !/\s$/.test(prompt) && !/^[\s.,!?;:]/.test(ghostSuffix)
+    const nextPrompt = prompt + (needsSpace ? ' ' : '') + ghostSuffix
+    setPrompt(nextPrompt)
     setGhostSuffix('')
+    setConsecutiveAccepts(n => n + 1)
+    // Move the caret to the end of the newly-accepted text so typing
+    // continues after it, not from the old (now mid-string) cursor spot.
+    requestAnimationFrame(() => {
+      const el = promptTextareaRef.current
+      if (el) {
+        el.selectionStart = el.selectionEnd = nextPrompt.length
+        el.scrollTop = el.scrollHeight
+      }
+      syncGhostScroll()
+    })
   }
 
   useEffect(() => () => {
@@ -227,6 +264,7 @@ export function SubmitPage() {
           <Field id="submit-prompt" label={mode === 'ui' ? 'Describe What to Build' : 'The Prompt'}>
             <div className="relative w-full bg-gray-50 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-600 rounded-lg focus-within:border-indigo-500 dark:focus-within:border-indigo-400 transition-colors">
               <div
+                ref={ghostOverlayRef}
                 aria-hidden="true"
                 className="absolute inset-0 px-3 py-2.5 text-sm whitespace-pre-wrap break-words overflow-hidden pointer-events-none font-sans"
               >
@@ -236,6 +274,7 @@ export function SubmitPage() {
 
               <textarea
                 id="submit-prompt"
+                ref={promptTextareaRef}
                 rows={7}
                 className="relative z-10 w-full bg-transparent px-3 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none resize-none"
                 required
@@ -245,7 +284,8 @@ export function SubmitPage() {
                     : 'You are a helpful assistant that…'
                 }
                 value={prompt}
-                onChange={e => setPrompt(e.target.value)}
+                onChange={e => { setPrompt(e.target.value); setConsecutiveAccepts(0) }}
+                onScroll={syncGhostScroll}
                 onKeyDown={e => {
                   if (e.key === 'Tab' && ghostSuffix) {
                     e.preventDefault()
@@ -256,6 +296,9 @@ export function SubmitPage() {
             </div>
             {ghostSuffix && (
               <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Press Tab to autocomplete</p>
+            )}
+            {!ghostSuffix && prompt.trim() && consecutiveAccepts >= MAX_CONSECUTIVE_GHOST_ACCEPTS && (
+              <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Keep typing to get more suggestions</p>
             )}
           </Field>
 
