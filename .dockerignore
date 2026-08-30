@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/.vs/
+PromptVcs.Cli/
+PromptVcs.Runner/
+mcp-server/.promptvcs/
+mcp-server/site/
+mcp-server/mcp-data/
+.git/
+*.md

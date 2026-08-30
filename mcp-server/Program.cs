@@ -5,10 +5,17 @@ using PromptVcs.McpServer.Services;
 using PromptVcs.McpServer.Tools;
 
 const string DefaultPort = "5279";
-var port = Environment.GetEnvironmentVariable("PROMPTVCS_MCP_PORT") ?? DefaultPort;
+// Render (and most PaaS hosts) inject PORT and expect the app to bind it;
+// PROMPTVCS_MCP_PORT stays as a manual override for local/other-host use.
+var port = Environment.GetEnvironmentVariable("PORT")
+    ?? Environment.GetEnvironmentVariable("PROMPTVCS_MCP_PORT")
+    ?? DefaultPort;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls($"http://localhost:{port}");
+// 0.0.0.0, not localhost — localhost only accepts loopback connections, so
+// a container's own healthcheck/reverse proxy (or anyone outside the
+// container) couldn't reach the app at all if it bound to localhost.
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddSignalR();
 
@@ -84,9 +91,10 @@ app.Lifetime.ApplicationStarted.Register(() =>
     Console.ForegroundColor = ConsoleColor.Green;
     Console.WriteLine("PromptVCS MCP Server Live!");
     Console.ForegroundColor = previous;
-    Console.WriteLine($"  MCP endpoint: http://localhost:{port}/mcp");
-    Console.WriteLine($"  Runner hub:   http://localhost:{port}/runnerhub");
-    Console.WriteLine($"  Artifacts:    http://localhost:{port}/site/<promptId>/");
+    var publicUrl = Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL") ?? $"http://localhost:{port}";
+    Console.WriteLine($"  MCP endpoint: {publicUrl}/mcp");
+    Console.WriteLine($"  Runner hub:   {publicUrl}/runnerhub");
+    Console.WriteLine($"  Artifacts:    {publicUrl}/site/<promptId>/");
     if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROMPTVCS_RUNNER_TOKEN")))
     {
         WriteWarning("  Warning: PROMPTVCS_RUNNER_TOKEN is not set — any runner can connect.");
