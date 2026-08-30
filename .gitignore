@@ -1,0 +1,9 @@
+.vs
+CLAUDE.md
+bin/
+obj/
+.promptvcs/
+mcp-server/site/
+mcp-server/mcp-data/
+*.log
+*.csproj.user

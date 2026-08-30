@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/mcp-server/">
+    <Project Path="mcp-server/PromptVcs.McpServer.csproj" />
+  </Folder>
+  <Project Path="PromptVcs.Cli/PromptVcs.Cli.csproj" />
+  <Project Path="PromptVcs.Core/PromptVcs.Core.csproj" />
+  <Project Path="PromptVcs.Runner/PromptVcs.Runner.csproj" />
+</Solution>
