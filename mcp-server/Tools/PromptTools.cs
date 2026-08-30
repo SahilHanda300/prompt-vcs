@@ -26,11 +26,13 @@ public class PromptTools
 
     private readonly ServerStore _store;
     private readonly PromptService _promptService;
+    private readonly string _siteDir;
 
-    public PromptTools(ServerStore store, PromptService promptService)
+    public PromptTools(ServerStore store, PromptService promptService, IWebHostEnvironment env)
     {
         _store = store;
         _promptService = promptService;
+        _siteDir = Path.Combine(env.ContentRootPath, "site");
     }
 
     [McpServerTool(Name = "init"), Description("Initializes the PromptVCS store on the server, if not already initialized.")]
@@ -38,6 +40,22 @@ public class PromptTools
     {
         var alreadyInitialized = await _store.InitAsync();
         return Ok(new { alreadyInitialized });
+    }
+
+    [McpServerTool(Name = "reset"), Description(
+        "Wipes every prompt, QA checkpoint, and build record, and deletes all generated " +
+        "sites. Cannot be undone.")]
+    public async Task<string> Reset()
+    {
+        await _store.ResetAsync();
+        if (Directory.Exists(_siteDir))
+        {
+            foreach (var dir in Directory.GetDirectories(_siteDir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+        return Ok(new { reset = true });
     }
 
     [McpServerTool(Name = "create"), Description(

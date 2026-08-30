@@ -19,6 +19,7 @@ var commandUsage = new Dictionary<string, string>
     ["list"] = "list",
     ["show"] = "show <name> [--version <n>]",
     ["diff"] = "diff <name> <v1> <v2>",
+    ["reset"] = "reset",
 };
 var isInteractive = false;
 
@@ -83,6 +84,9 @@ async Task<int> RunCommandAsync(string[] cmdArgs)
                 break;
             case "diff":
                 await RunDiffAsync(RequireArg(cmdArgs, 1, "name"), RequireArg(cmdArgs, 2, "v1"), RequireArg(cmdArgs, 3, "v2"));
+                break;
+            case "reset":
+                await RunResetAsync();
                 break;
             case "-h":
             case "--help":
@@ -173,6 +177,12 @@ async Task RunInitAsync()
     {
         WriteLineColor("Initialized PromptVCS store on the server.", ConsoleColor.Green);
     }
+}
+
+async Task RunResetAsync()
+{
+    await client.ResetAsync();
+    WriteLineColor("Store reset. All prompts and generated sites deleted.", ConsoleColor.Yellow);
 }
 
 async Task RunCreateAsync(string name, string content)
@@ -445,7 +455,11 @@ static string[] Tokenize(string line)
 
 static void PrintUsage()
 {
-    Console.WriteLine("""
+    // Written as individual WriteLine calls, not one big raw-string literal —
+    // a raw string's embedded newlines are baked into the string itself and
+    // bypass Console.Out.NewLine entirely, reintroducing the same bare-LF
+    // staircasing in the web terminal that the CRLF fix elsewhere solved.
+    const string text = """
     pvcs — version control for prompts with an automatic dev/qa/prod pipeline
 
     Commands:
@@ -455,7 +469,12 @@ static void PrintUsage()
       list
       show <name> [--version <n>]
       diff <name> <v1> <v2>
-    """);
+      reset
+    """;
+    foreach (var line in text.Split('\n'))
+    {
+        Console.WriteLine(line.TrimEnd('\r'));
+    }
 }
 
 class CliUsageException(string message) : Exception(message);

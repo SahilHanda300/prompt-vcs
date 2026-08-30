@@ -35,6 +35,21 @@ public class ServerStore
         }
     }
 
+    /// <summary>Wipes every prompt, checkpoint, and build record back to empty.</summary>
+    public async Task ResetAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            _cache = new Store();
+            PromptStore.Save(_cache, _dataDir);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     public async Task<T> ReadAsync<T>(Func<Store, T> action)
     {
         await _lock.WaitAsync();

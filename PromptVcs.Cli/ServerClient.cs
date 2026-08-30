@@ -21,6 +21,9 @@ public class ServerClient
     public async Task<InitResultDto> InitAsync() =>
         await CallAsync<InitResultDto>("init", new Dictionary<string, object?>());
 
+    public async Task<ResetResultDto> ResetAsync() =>
+        await CallAsync<ResetResultDto>("reset", new Dictionary<string, object?>());
+
     public async Task<PipelineResultDto> CreateAsync(string name, string content) =>
         await CallAsync<PipelineResultDto>("create", new Dictionary<string, object?> { ["name"] = name, ["content"] = content });
 
