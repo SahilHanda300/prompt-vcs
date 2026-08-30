@@ -2,6 +2,12 @@ using System.Text;
 using PromptVcs.Cli;
 
 Console.OutputEncoding = Encoding.UTF8;
+// Force CRLF regardless of OS default (bare LF on Linux). Real terminals get
+// LF-to-CRLF translated for free by the TTY driver; this CLI's output can
+// also be piped through a non-TTY bridge (the web terminal), which performs
+// no such translation — without it, xterm.js moves down a row on each "\n"
+// without returning to column 0, staircasing every line to the right.
+Console.Out.NewLine = "\r\n";
 
 var client = new ServerClient();
 
@@ -43,11 +49,7 @@ async Task<int> RunInteractiveAsync()
 
 void PrintWelcome()
 {
-    Console.Write("Welcome to ");
-    WriteColor("PromptVCS", ConsoleColor.Cyan);
-    Console.Write(", ");
-    WriteColor(Environment.UserName, ConsoleColor.Magenta);
-    Console.WriteLine("!");
+    WriteLineColor("PromptVCS Terminal Version 1.0", ConsoleColor.Cyan);
     Console.Write("If you want to get started, try: ");
     WriteLineColor("init", ConsoleColor.Green);
     Console.Write("Type ");
@@ -225,13 +227,16 @@ async Task RunShowAsync(string name, int? version)
 {
     var result = await client.ShowAsync(name, version);
     var record = result.Record;
-    Console.WriteLine($"# {record.Name} (v{result.Version})\n");
+    Console.WriteLine($"# {record.Name} (v{result.Version})");
+    Console.WriteLine();
     Console.WriteLine(result.Content);
-    Console.WriteLine($"\nenvironments: dev={record.Environments.Dev?.ToString() ?? "-"} qa={record.Environments.Qa?.ToString() ?? "-"} prod={record.Environments.Prod?.ToString() ?? "-"}");
+    Console.WriteLine();
+    Console.WriteLine($"environments: dev={record.Environments.Dev?.ToString() ?? "-"} qa={record.Environments.Qa?.ToString() ?? "-"} prod={record.Environments.Prod?.ToString() ?? "-"}");
     Console.WriteLine($"versions: {string.Join(", ", record.History.Select(h => h.Version))}");
     if (record.QaCheckpoints.Count > 0)
     {
-        Console.WriteLine("\nqa checkpoints:");
+        Console.WriteLine();
+        Console.WriteLine("qa checkpoints:");
         foreach (var cp in record.QaCheckpoints)
         {
             Console.Write($"  v{cp.Version} — ");
@@ -241,7 +246,8 @@ async Task RunShowAsync(string name, int? version)
     }
     if (record.Builds.Count > 0)
     {
-        Console.WriteLine("\nbuilds:");
+        Console.WriteLine();
+        Console.WriteLine("builds:");
         foreach (var b in record.Builds)
         {
             var suffix = b.ArtifactUrl != null ? $" — {ResolveArtifactUrl(b.ArtifactUrl)}" : "";
