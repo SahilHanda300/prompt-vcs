@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PromptVCS Terminal</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.css">
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #1e1e1e;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  #gate {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+  }
+  #gate h1 {
+    color: #eee;
+    font-size: 1.1rem;
+    font-weight: 500;
+  }
+  #gate input {
+    padding: 10px 12px;
+    width: 280px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: #2a2a2a;
+    color: #eee;
+    font-size: 0.95rem;
+  }
+  #gate button {
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: none;
+    background: #4f8ef7;
+    color: white;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  #gate button:hover { background: #3f7fe0; }
+  #gate .error { color: #f77; font-size: 0.85rem; min-height: 1em; }
+  #terminal-wrap {
+    display: none;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+  }
+  #terminal { height: 100%; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <h1>PromptVCS Terminal</h1>
+  <input id="token" type="password" placeholder="Server token" autocomplete="off">
+  <button id="connect">Connect</button>
+  <div class="error" id="error"></div>
+</div>
+
+<div id="terminal-wrap">
+  <div id="terminal"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.js"></script>
+<script>
+(function () {
+  var BACKSPACE = String.fromCharCode(127);
+  var CTRL_C = String.fromCharCode(3);
+
+  const gate = document.getElementById('gate');
+  const wrap = document.getElementById('terminal-wrap');
+  const tokenInput = document.getElementById('token');
+  const errorEl = document.getElementById('error');
+  const connectBtn = document.getElementById('connect');
+
+  const urlToken = new URLSearchParams(location.search).get('token');
+  if (urlToken) {
+    connect(urlToken);
+  }
+
+  connectBtn.addEventListener('click', () => connect(tokenInput.value));
+  tokenInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') connect(tokenInput.value); });
+
+  function connect(token) {
+    errorEl.textContent = '';
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${proto}//${location.host}/terminal-ws?token=${encodeURIComponent(token || '')}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      gate.style.display = 'none';
+      wrap.style.display = 'block';
+      startTerminal(ws);
+    };
+    ws.onerror = () => {
+      errorEl.textContent = 'Could not connect. Check the token and try again.';
+    };
+    ws.onclose = () => {
+      if (wrap.style.display === 'none') {
+        errorEl.textContent = 'Connection rejected — check the token.';
+      }
+    };
+  }
+
+  function startTerminal(ws) {
+    const term = new Terminal({
+      cursorBlink: true,
+      fontSize: 14,
+      theme: { background: '#1e1e1e' },
+    });
+    term.open(document.getElementById('terminal'));
+    term.focus();
+
+    let lineBuffer = '';
+
+    ws.onmessage = (event) => term.write(event.data);
+    ws.onclose = () => term.write('\r\n\x1b[33m[connection closed]\x1b[0m\r\n');
+
+    term.onData((data) => {
+      for (const ch of data) {
+        if (ch === '\r') {
+          term.write('\r\n');
+          if (ws.readyState === WebSocket.OPEN) ws.send(lineBuffer);
+          lineBuffer = '';
+        } else if (ch === BACKSPACE) {
+          if (lineBuffer.length > 0) {
+            lineBuffer = lineBuffer.slice(0, -1);
+            term.write('\b \b');
+          }
+        } else if (ch === CTRL_C) {
+          // No local shell to interrupt — ignore.
+        } else {
+          lineBuffer += ch;
+          term.write(ch);
+        }
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

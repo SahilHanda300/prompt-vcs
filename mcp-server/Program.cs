@@ -30,12 +30,18 @@ builder.Services.AddSingleton(sp => new PublishRules(
 builder.Services.AddSingleton<Pipeline>();
 builder.Services.AddSingleton<PromptService>();
 
+var cliDllPath = Environment.GetEnvironmentVariable("PROMPTVCS_CLI_PATH") ?? "/app/cli/pvcs.dll";
+builder.Services.AddSingleton(_ => new TerminalSessionManager(cliDllPath, int.Parse(port)));
+
 builder.Services
     .AddMcpServer()
     .WithHttpTransport()
     .WithTools<PromptTools>();
 
 var app = builder.Build();
+
+app.UseWebSockets();
+app.UseStaticFiles(); // default wwwroot — serves wwwroot/terminal.html at /terminal.html
 
 var siteDir = Path.Combine(app.Environment.ContentRootPath, "site");
 Directory.CreateDirectory(siteDir);
@@ -58,7 +64,8 @@ app.UseStaticFiles(new StaticFileOptions
     },
 });
 
-app.MapGet("/", () => "PromptVCS MCP server is running. MCP endpoint: /mcp, runner hub: /runnerhub, artifacts: /site/<promptId>/");
+app.MapGet("/", () => "PromptVCS MCP server is running. MCP endpoint: /mcp, runner hub: /runnerhub, artifacts: /site/<promptId>/, terminal: /terminal");
+app.MapGet("/terminal", () => Results.Redirect("/terminal.html"));
 
 // Shared-secret auth on the CLI-facing MCP endpoint — anyone who can reach
 // this server otherwise has full read/write access to every prompt, so this
@@ -85,6 +92,30 @@ app.Use(async (context, next) =>
 app.MapMcp("/mcp");
 app.MapHub<RunnerHub>("/runnerhub");
 
+app.Map("/terminal-ws", async context =>
+{
+    if (!context.WebSockets.IsWebSocketRequest)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return;
+    }
+
+    var expectedToken = Environment.GetEnvironmentVariable("PROMPTVCS_API_TOKEN");
+    if (!string.IsNullOrEmpty(expectedToken))
+    {
+        var providedToken = context.Request.Query["token"].ToString();
+        if (providedToken != expectedToken)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+    }
+
+    var terminalSessions = context.RequestServices.GetRequiredService<TerminalSessionManager>();
+    using var socket = await context.WebSockets.AcceptWebSocketAsync();
+    await terminalSessions.RunSessionAsync(socket, context.RequestAborted);
+});
+
 app.Lifetime.ApplicationStarted.Register(() =>
 {
     var previous = Console.ForegroundColor;
@@ -95,13 +126,14 @@ app.Lifetime.ApplicationStarted.Register(() =>
     Console.WriteLine($"  MCP endpoint: {publicUrl}/mcp");
     Console.WriteLine($"  Runner hub:   {publicUrl}/runnerhub");
     Console.WriteLine($"  Artifacts:    {publicUrl}/site/<promptId>/");
+    Console.WriteLine($"  Terminal:     {publicUrl}/terminal");
     if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROMPTVCS_RUNNER_TOKEN")))
     {
         WriteWarning("  Warning: PROMPTVCS_RUNNER_TOKEN is not set — any runner can connect.");
     }
     if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROMPTVCS_API_TOKEN")))
     {
-        WriteWarning("  Warning: PROMPTVCS_API_TOKEN is not set — anyone who can reach this server has full access to the store.");
+        WriteWarning("  Warning: PROMPTVCS_API_TOKEN is not set — anyone who can reach this server has full access to the store, and the /terminal page too.");
     }
 });
 

@@ -213,12 +213,12 @@ async Task RunListAsync()
     }
 }
 
-static ConsoleColor BuildStatusColor(string status) => status switch
+static ConsoleColor? BuildStatusColor(string status) => status switch
 {
     "success" => ConsoleColor.Green,
     "failed" => ConsoleColor.Red,
     "skipped" => ConsoleColor.Yellow,
-    _ => Console.ForegroundColor,
+    _ => null,
 };
 
 async Task RunShowAsync(string name, int? version)
@@ -261,9 +261,9 @@ async Task RunDiffAsync(string name, string v1Raw, string v2Raw)
     {
         var (prefix, color) = line.Type switch
         {
-            "inserted" => ("+", ConsoleColor.Green),
-            "deleted" => ("-", ConsoleColor.Red),
-            _ => (" ", Console.ForegroundColor),
+            "inserted" => ("+", (ConsoleColor?)ConsoleColor.Green),
+            "deleted" => ("-", (ConsoleColor?)ConsoleColor.Red),
+            _ => (" ", (ConsoleColor?)null),
         };
         WriteLineColor($"{prefix} {line.Text}", color);
     }
@@ -330,21 +330,33 @@ static string? ResolveArtifactUrl(string? path)
     return baseUrl.TrimEnd('/') + path;
 }
 
-static void WriteColor(string text, ConsoleColor color)
+// Raw ANSI SGR codes rather than Console.ForegroundColor: this CLI runs in
+// three contexts now (a local Windows console, a local Linux console, and
+// piped through a WebSocket to a browser-based xterm.js terminal), and
+// .NET's Console color API may silently no-op when it detects stdout isn't
+// a real attached terminal — exactly the case once output is redirected to
+// be pumped elsewhere. Raw codes work identically in all three.
+static void WriteColor(string text, ConsoleColor? color)
 {
-    var previous = Console.ForegroundColor;
-    Console.ForegroundColor = color;
-    Console.Write(text);
-    Console.ForegroundColor = previous;
+    if (color == null) { Console.Write(text); return; }
+    Console.Write($"{AnsiCode(color.Value)}{text}\x1b[0m");
 }
 
-static void WriteLineColor(string text, ConsoleColor color)
+static void WriteLineColor(string text, ConsoleColor? color)
 {
-    var previous = Console.ForegroundColor;
-    Console.ForegroundColor = color;
-    Console.WriteLine(text);
-    Console.ForegroundColor = previous;
+    if (color == null) { Console.WriteLine(text); return; }
+    Console.WriteLine($"{AnsiCode(color.Value)}{text}\x1b[0m");
 }
+
+static string AnsiCode(ConsoleColor color) => color switch
+{
+    ConsoleColor.Green => "\x1b[32m",
+    ConsoleColor.Red => "\x1b[31m",
+    ConsoleColor.Yellow => "\x1b[33m",
+    ConsoleColor.Cyan => "\x1b[36m",
+    ConsoleColor.Magenta => "\x1b[35m",
+    _ => "",
+};
 
 static string RequireArg(string[] args, int index, string label)
 {
