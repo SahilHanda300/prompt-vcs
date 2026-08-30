@@ -7,3 +7,4 @@ mcp-server/site/
 mcp-server/mcp-data/
 *.log
 *.csproj.user
+.claude
