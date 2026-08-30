@@ -27,6 +27,13 @@ WORKDIR /app
 COPY --from=build /app/publish .
 COPY --from=build /app/cli-publish ./cli
 
+# ASP.NET Core's default config setup watches appsettings.json for changes
+# via a FileSystemWatcher (inotify on Linux) so it can hot-reload — useless
+# in a container that gets rebuilt on every deploy anyway, and some hosts
+# (Render included) cap inotify instances low enough that just starting up
+# throws an unhandled IOException before the app ever binds a port.
+ENV DOTNET_hostBuilder__reloadConfigOnChange=false
+
 # Render injects PORT at runtime; Program.cs reads it directly, so no
 # ENV/EXPOSE default is required here beyond documenting intent.
 EXPOSE 8080
