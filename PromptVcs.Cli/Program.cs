@@ -13,7 +13,12 @@ var client = new ServerClient();
 
 var commandUsage = new Dictionary<string, string>
 {
-    ["init"] = "init",
+    // "register"/"login" are deliberately not listed here (or in help/the
+    // welcome banner) — they're still fully functional commands, but the
+    // /terminal page's own login form now sends them on the user's behalf,
+    // so they're an implementation detail rather than something to
+    // advertise for manual typing.
+    ["logout"] = "logout",
     ["create"] = "create <name> [--content <text> | --file <path>]",
     ["edit"] = "edit <name> [--content <text> | --file <path>]",
     ["list"] = "list",
@@ -36,7 +41,7 @@ async Task<int> RunInteractiveAsync()
     PrintWelcome();
     while (true)
     {
-        Console.Write("pvcs> ");
+        Console.Write("prompt-vcs> ");
         var line = Console.ReadLine();
         if (line == null) return 0; // EOF (e.g. redirected/closed input)
 
@@ -51,8 +56,6 @@ async Task<int> RunInteractiveAsync()
 void PrintWelcome()
 {
     WriteLineColor("PromptVCS Terminal Version 1.0", ConsoleColor.Cyan);
-    Console.Write("If you want to get started, try: ");
-    WriteLineColor("init", ConsoleColor.Green);
     Console.Write("Type ");
     WriteColor("help", ConsoleColor.Yellow);
     Console.Write(" to see all commands, or ");
@@ -67,8 +70,14 @@ async Task<int> RunCommandAsync(string[] cmdArgs)
     {
         switch (command)
         {
-            case "init":
-                await RunInitAsync();
+            case "register":
+                await RunRegisterAsync(RequireArg(cmdArgs, 1, "username"), RequireArg(cmdArgs, 2, "password"));
+                break;
+            case "login":
+                await RunLoginAsync(RequireArg(cmdArgs, 1, "username"), RequireArg(cmdArgs, 2, "password"));
+                break;
+            case "logout":
+                await RunLogoutAsync();
                 break;
             case "create":
                 await RunCreateAsync(RequireArg(cmdArgs, 1, "name"), ReadContent(cmdArgs, isInteractive));
@@ -101,7 +110,7 @@ async Task<int> RunCommandAsync(string[] cmdArgs)
                     Console.Write("Did you mean ");
                     WriteColor(suggestion, ConsoleColor.Yellow);
                     Console.WriteLine("?");
-                    WriteLineColor($"  Usage: pvcs {commandUsage[suggestion]}", ConsoleColor.Yellow);
+                    WriteLineColor($"  Usage: prompt-vcs {commandUsage[suggestion]}", ConsoleColor.Yellow);
                 }
                 else
                 {
@@ -118,7 +127,7 @@ async Task<int> RunCommandAsync(string[] cmdArgs)
         WriteLineColor($"Error: {ex.Message}", ConsoleColor.Red);
         if (commandUsage.TryGetValue(command, out var usage))
         {
-            WriteLineColor($"  Usage: pvcs {usage}", ConsoleColor.Yellow);
+            WriteLineColor($"  Usage: prompt-vcs {usage}", ConsoleColor.Yellow);
         }
         return 1;
     }
@@ -166,17 +175,41 @@ static int LevenshteinDistance(string a, string b)
     return d[a.Length, b.Length];
 }
 
-async Task RunInitAsync()
+async Task RunRegisterAsync(string username, string password)
 {
-    var result = await client.InitAsync();
-    if (result.AlreadyInitialized)
+    var cached = SessionCache.Load();
+    var result = await client.RegisterAsync(username, password);
+    WriteLineColor($"Registered {username}{(result.IsAdmin ? " (admin)" : "")}.", ConsoleColor.Green);
+
+    // Only auto-adopt the new session when there was no existing one — an
+    // already-logged-in user registering someone else (e.g. from the same
+    // terminal) should stay logged in as themselves, not get silently
+    // switched to the new account.
+    if (cached == null)
     {
-        WriteLineColor("Store already initialized.", ConsoleColor.Yellow);
+        SessionCache.Save(new CachedSession(result.SessionToken!, username, result.IsAdmin));
+        WriteLineColor($"Logged in as {username}.", ConsoleColor.Green);
     }
-    else
+}
+
+async Task RunLoginAsync(string username, string password)
+{
+    var result = await client.LoginAsync(username, password);
+    SessionCache.Save(new CachedSession(result.SessionToken!, username, result.IsAdmin));
+    WriteLineColor($"Logged in as {username}{(result.IsAdmin ? " (admin)" : "")}.", ConsoleColor.Green);
+}
+
+async Task RunLogoutAsync()
+{
+    var cached = SessionCache.Load();
+    if (cached == null)
     {
-        WriteLineColor("Initialized PromptVCS store on the server.", ConsoleColor.Green);
+        WriteLineColor("Not logged in.", ConsoleColor.Yellow);
+        return;
     }
+    await client.LogoutAsync(cached.SessionToken);
+    SessionCache.Clear();
+    WriteLineColor("Logged out.", ConsoleColor.Green);
 }
 
 async Task RunResetAsync()
@@ -202,7 +235,7 @@ async Task RunListAsync()
     var items = await client.ListAsync();
     if (items.Count == 0)
     {
-        Console.WriteLine("No prompts yet. Use `pvcs create <name>` to add one.");
+        Console.WriteLine("No prompts yet. Use `prompt-vcs create <name>` to add one.");
         return;
     }
     Console.WriteLine(string.Join("\t", "name", "dev", "qa", "prod", "latest build"));
@@ -455,26 +488,31 @@ static string[] Tokenize(string line)
 
 static void PrintUsage()
 {
-    // Written as individual WriteLine calls, not one big raw-string literal —
-    // a raw string's embedded newlines are baked into the string itself and
-    // bypass Console.Out.NewLine entirely, reintroducing the same bare-LF
-    // staircasing in the web terminal that the CRLF fix elsewhere solved.
-    const string text = """
-    pvcs — version control for prompts with an automatic dev/qa/prod pipeline
+    // Individual WriteLine/WriteLineColor calls, not one big raw-string
+    // literal — a raw string's embedded newlines are baked into the string
+    // itself and bypass Console.Out.NewLine entirely, reintroducing the same
+    // bare-LF staircasing in the web terminal that the CRLF fix elsewhere
+    // solved. One line for the command, one for its description — kept short
+    // (not column-aligned to a shared width) on purpose: the browser
+    // terminal is often narrower than a desktop console, and long aligned
+    // lines wrap mid-word there since there's no reflow, just a fixed column
+    // count.
+    Console.WriteLine("prompt-vcs — version control for prompts with an automatic dev/qa/prod pipeline");
+    Console.WriteLine();
+    Console.WriteLine("Commands:");
+    PrintCommand("logout", "Logs out of the current session");
+    PrintCommand("create <name> [--content <text> | --file <path>]", "Creates a new app from a prompt");
+    PrintCommand("edit <name> [--content <text> | --file <path>]", "Updates an existing app with a new prompt");
+    PrintCommand("list", "Lists all apps");
+    PrintCommand("show <name> [--version <n>]", "Shows a specific version of an app");
+    PrintCommand("diff <name> <v1> <v2>", "Shows the differences between two versions of an app");
+    PrintCommand("reset", "Deletes all apps and resets the store (admin only)");
+}
 
-    Commands:
-      init
-      create <name> [--content <text> | --file <path>]
-      edit <name> [--content <text> | --file <path>]
-      list
-      show <name> [--version <n>]
-      diff <name> <v1> <v2>
-      reset
-    """;
-    foreach (var line in text.Split('\n'))
-    {
-        Console.WriteLine(line.TrimEnd('\r'));
-    }
+static void PrintCommand(string usage, string description)
+{
+    WriteLineColor($"  {usage}", ConsoleColor.Green);
+    Console.WriteLine($"      {description}");
 }
 
 class CliUsageException(string message) : Exception(message);

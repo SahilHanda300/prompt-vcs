@@ -26,27 +26,25 @@ public class PromptTools
 
     private readonly ServerStore _store;
     private readonly PromptService _promptService;
+    private readonly MongoAuthService _auth;
     private readonly string _siteDir;
 
-    public PromptTools(ServerStore store, PromptService promptService, IWebHostEnvironment env)
+    public PromptTools(ServerStore store, PromptService promptService, MongoAuthService auth, IWebHostEnvironment env)
     {
         _store = store;
         _promptService = promptService;
+        _auth = auth;
         _siteDir = Path.Combine(env.ContentRootPath, "site");
-    }
-
-    [McpServerTool(Name = "init"), Description("Initializes the PromptVCS store on the server, if not already initialized.")]
-    public async Task<string> Init()
-    {
-        var alreadyInitialized = await _store.InitAsync();
-        return Ok(new { alreadyInitialized });
     }
 
     [McpServerTool(Name = "reset"), Description(
         "Wipes every prompt, QA checkpoint, and build record, and deletes all generated " +
-        "sites. Cannot be undone.")]
-    public async Task<string> Reset()
+        "sites. Cannot be undone. Admin only.")]
+    public async Task<string> Reset([Description("Session token")] string? sessionToken)
     {
+        var authError = await RequireAuthAsync(sessionToken, requireAdmin: true);
+        if (authError != null) return authError;
+
         await _store.ResetAsync();
         if (Directory.Exists(_siteDir))
         {
@@ -61,20 +59,33 @@ public class PromptTools
     [McpServerTool(Name = "create"), Description(
         "Creates a new prompt and runs it through the automatic dev->qa->prod pipeline: " +
         "validation, content safety, trial generation, then publish if all pass.")]
-    public Task<string> Create(
+    public async Task<string> Create(
         [Description("Name for the new prompt")] string name,
-        [Description("Prompt content")] string content) =>
-        RunPipelineAsync(store => _promptService.CreateAsync(store, name, content));
+        [Description("Prompt content")] string content,
+        [Description("Session token")] string? sessionToken)
+    {
+        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        if (authError != null) return authError;
+        return await RunPipelineAsync(store => _promptService.CreateAsync(store, name, content));
+    }
 
     [McpServerTool(Name = "edit"), Description("Adds a new version to an existing prompt and runs it through the pipeline again.")]
-    public Task<string> Edit(
+    public async Task<string> Edit(
         [Description("Name of the existing prompt")] string name,
-        [Description("New prompt content")] string content) =>
-        RunPipelineAsync(store => _promptService.EditAsync(store, name, content));
+        [Description("New prompt content")] string content,
+        [Description("Session token")] string? sessionToken)
+    {
+        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        if (authError != null) return authError;
+        return await RunPipelineAsync(store => _promptService.EditAsync(store, name, content));
+    }
 
     [McpServerTool(Name = "list"), Description("Lists all prompts and their environment/build status.")]
-    public async Task<string> List()
+    public async Task<string> List([Description("Session token")] string? sessionToken)
     {
+        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        if (authError != null) return authError;
+
         return await _store.ReadAsync(store =>
         {
             var items = PromptService.List(store).Select(r => new
@@ -94,8 +105,12 @@ public class PromptTools
     [McpServerTool(Name = "show"), Description("Shows a prompt's content, environments, QA history, and build history.")]
     public async Task<string> Show(
         [Description("Prompt name")] string name,
-        [Description("Specific version to show; defaults to the prod version, or latest")] int? version = null)
+        [Description("Specific version to show; defaults to the prod version, or latest")] int? version = null,
+        [Description("Session token")] string? sessionToken = null)
     {
+        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        if (authError != null) return authError;
+
         try
         {
             return await _store.ReadAsync(store =>
@@ -114,8 +129,12 @@ public class PromptTools
     public async Task<string> Diff(
         [Description("Prompt name")] string name,
         [Description("First version")] int v1,
-        [Description("Second version")] int v2)
+        [Description("Second version")] int v2,
+        [Description("Session token")] string? sessionToken = null)
     {
+        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        if (authError != null) return authError;
+
         try
         {
             return await _store.ReadAsync(store =>
@@ -141,6 +160,16 @@ public class PromptTools
         {
             return Error(ex.Message);
         }
+    }
+
+    /// Returns an error envelope if the session is missing/expired/lacks
+    /// admin when required, or null when the caller may proceed.
+    private async Task<string?> RequireAuthAsync(string? sessionToken, bool requireAdmin)
+    {
+        var (valid, _, isAdmin) = await _auth.ValidateSessionAsync(sessionToken);
+        if (!valid) return Error("Not logged in. Run \"login\" first.");
+        if (requireAdmin && !isAdmin) return Error("Admin privileges required for this command.");
+        return null;
     }
 
     private static string Ok(object data) => JsonSerializer.Serialize(new { status = "ok", data }, JsonOptions);

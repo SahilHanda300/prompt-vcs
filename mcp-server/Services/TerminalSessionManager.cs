@@ -47,6 +47,13 @@ public class TerminalSessionManager
 
     private async Task RunProcessBridgeAsync(WebSocket socket, CancellationToken outerCt)
     {
+        // Every browser terminal session spawns a CLI process on this same
+        // server machine, so a shared session-cache path (the CLI's normal
+        // %USERPROFILE% default) would let one browser tab's login leak into
+        // another's. Each session gets its own throwaway file instead —
+        // deleted once the session ends.
+        var sessionFilePath = Path.Combine(Path.GetTempPath(), "promptvcs-terminal-sessions", $"{Guid.NewGuid():N}.json");
+
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = "dotnet",
@@ -60,11 +67,7 @@ public class TerminalSessionManager
         };
         psi.ArgumentList.Add(_cliDllPath);
         psi.Environment["PROMPTVCS_MCP_URL"] = $"http://localhost:{_port}/mcp";
-        var apiToken = Environment.GetEnvironmentVariable("PROMPTVCS_API_TOKEN");
-        if (!string.IsNullOrEmpty(apiToken))
-        {
-            psi.Environment["PROMPTVCS_API_TOKEN"] = apiToken;
-        }
+        psi.Environment["PROMPTVCS_SESSION_PATH"] = sessionFilePath;
 
         using var process = new System.Diagnostics.Process { StartInfo = psi };
         try
@@ -118,6 +121,8 @@ public class TerminalSessionManager
         await CloseQuietlyAsync(socket, "Session ended");
         sessionCts.CancelAfter(TimeSpan.FromSeconds(2));
         await Task.WhenAll(outputTask, errorTask, inputTask).ContinueWith(_ => { }, TaskScheduler.Default);
+
+        try { File.Delete(sessionFilePath); } catch { /* best effort — nothing sensitive survives a temp dir cleanup either way */ }
     }
 
     private static async Task PumpProcessOutputToSocketAsync(Stream source, WebSocket socket, Action onActivity, CancellationToken ct)

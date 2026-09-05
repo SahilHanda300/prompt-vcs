@@ -19,6 +19,7 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddSignalR();
 
+builder.Services.AddSingleton<MongoDatabaseProvider>();
 builder.Services.AddSingleton<ServerStore>();
 builder.Services.AddSingleton<RunnerRegistry>();
 builder.Services.AddSingleton<RunnerDispatchInvoker>();
@@ -29,14 +30,16 @@ builder.Services.AddSingleton(sp => new PublishRules(
     Path.Combine(builder.Environment.ContentRootPath, "site")));
 builder.Services.AddSingleton<Pipeline>();
 builder.Services.AddSingleton<PromptService>();
+builder.Services.AddSingleton<MongoAuthService>();
 
-var cliDllPath = Environment.GetEnvironmentVariable("PROMPTVCS_CLI_PATH") ?? "/app/cli/pvcs.dll";
+var cliDllPath = Environment.GetEnvironmentVariable("PROMPTVCS_CLI_PATH") ?? "/app/cli/prompt-vcs.dll";
 builder.Services.AddSingleton(_ => new TerminalSessionManager(cliDllPath, int.Parse(port)));
 
 builder.Services
     .AddMcpServer()
     .WithHttpTransport()
-    .WithTools<PromptTools>();
+    .WithTools<PromptTools>()
+    .WithTools<AuthTools>();
 
 var app = builder.Build();
 
@@ -67,28 +70,11 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapGet("/", () => "PromptVCS MCP server is running. MCP endpoint: /mcp, runner hub: /runnerhub, artifacts: /site/<promptId>/, terminal: /terminal");
 app.MapGet("/terminal", () => Results.Redirect("/terminal.html"));
 
-// Shared-secret auth on the CLI-facing MCP endpoint — anyone who can reach
-// this server otherwise has full read/write access to every prompt, so this
-// matters once the server is exposed publicly, not just for the Runner hub.
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/mcp"))
-    {
-        var expectedToken = Environment.GetEnvironmentVariable("PROMPTVCS_API_TOKEN");
-        if (!string.IsNullOrEmpty(expectedToken))
-        {
-            var providedToken = context.Request.Headers["X-PromptVCS-Token"].ToString();
-            if (providedToken != expectedToken)
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsync("Unauthorized");
-                return;
-            }
-        }
-    }
-    await next();
-});
-
+// CLI-facing auth on /mcp is now per-user, via MongoDB-backed login (see
+// AuthTools/MongoAuthService) rather than a single shared token: every tool
+// except login/register validates a sessionToken argument itself. There is
+// deliberately no blanket gate in front of /mcp anymore — login/register
+// have to be reachable before a caller has any session to present.
 app.MapMcp("/mcp");
 app.MapHub<RunnerHub>("/runnerhub");
 
@@ -100,17 +86,10 @@ app.Map("/terminal-ws", async context =>
         return;
     }
 
-    var expectedToken = Environment.GetEnvironmentVariable("PROMPTVCS_API_TOKEN");
-    if (!string.IsNullOrEmpty(expectedToken))
-    {
-        var providedToken = context.Request.Query["token"].ToString();
-        if (providedToken != expectedToken)
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
-        }
-    }
-
+    // No token gate here anymore — the spawned CLI's own register/login
+    // (MongoDB-backed) is the real gate now, same as /mcp. Anyone can open a
+    // terminal session, but they can't do anything beyond register/login
+    // without real credentials.
     var terminalSessions = context.RequestServices.GetRequiredService<TerminalSessionManager>();
     using var socket = await context.WebSockets.AcceptWebSocketAsync();
     await terminalSessions.RunSessionAsync(socket, context.RequestAborted);
@@ -131,9 +110,9 @@ app.Lifetime.ApplicationStarted.Register(() =>
     {
         WriteWarning("  Warning: PROMPTVCS_RUNNER_TOKEN is not set — any runner can connect.");
     }
-    if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROMPTVCS_API_TOKEN")))
+    if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROMPTVCS_MONGO_URI")))
     {
-        WriteWarning("  Warning: PROMPTVCS_API_TOKEN is not set — anyone who can reach this server has full access to the store, and the /terminal page too.");
+        WriteWarning("  Warning: PROMPTVCS_MONGO_URI is not set — MongoDB now backs both auth and the prompt store itself, so every command will fail.");
     }
 });
 

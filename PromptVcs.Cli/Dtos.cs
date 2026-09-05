@@ -21,5 +21,7 @@ public record ShowResultDto(PromptRecordDto Record, int Version, string Content)
 
 public record DiffLineDto(string Type, string Text);
 
-public record InitResultDto(bool AlreadyInitialized);
 public record ResetResultDto(bool Reset);
+
+public record AuthResultDto(string? SessionToken, bool IsAdmin);
+public record LogoutResultDto(bool LoggedOut);

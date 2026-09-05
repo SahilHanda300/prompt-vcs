@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
@@ -15,7 +16,7 @@ public class PromptService
 
     public Task<PipelineResult> CreateAsync(Store store, string name, string content)
     {
-        var id = PromptStore.Slugify(name);
+        var id = Slugify(name);
         if (store.Prompts.ContainsKey(id))
         {
             throw new InvalidOperationException($"Prompt \"{name}\" already exists (id \"{id}\"). Use \"edit\" to add a new version.");
@@ -56,11 +57,17 @@ public class PromptService
 
     private static PromptRecord GetOrThrow(Store store, string name)
     {
-        var id = PromptStore.Slugify(name);
+        var id = Slugify(name);
         if (!store.Prompts.TryGetValue(id, out var record))
         {
             throw new InvalidOperationException($"Prompt \"{name}\" not found.");
         }
         return record;
+    }
+
+    private static string Slugify(string name)
+    {
+        var slug = Regex.Replace(name.Trim().ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+        return string.IsNullOrEmpty(slug) ? "prompt" : slug;
     }
 }
