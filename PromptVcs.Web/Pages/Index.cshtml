@@ -1,0 +1,304 @@
+@page
+@{
+    ViewData["Title"] = "Home";
+}
+
+<section class="max-w-3xl mx-auto px-6 pt-16 sm:pt-24 pb-16 text-center">
+    <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-5">Version control for prompts.</h1>
+    <p class="text-slate-400 text-base sm:text-lg max-w-xl mx-auto mb-9">
+        Submit a prompt once. From there, PromptVCS runs it through
+        <strong class="text-slate-100 font-semibold">DEV &rarr; QA &rarr; PROD</strong> on its own — no manual
+        promote step, no manual QA gate. When it reaches PROD, your prompt
+        becomes a live site or app, generated automatically.
+    </p>
+    <div class="flex flex-col sm:flex-row justify-center gap-3.5">
+        <a href="/Register" class="inline-block px-6 py-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition-colors">Get started</a>
+        <a href="/Login" class="inline-block px-6 py-3 rounded-lg border border-slate-700 hover:border-cyan-400 hover:text-cyan-400 text-slate-100 font-semibold text-sm transition-colors">Log in</a>
+    </div>
+
+    <div class="max-w-xl mx-auto mt-10 sm:mt-12 text-left bg-[#0f1115] border border-slate-800 rounded-xl overflow-hidden shadow-2xl shadow-black/60" aria-hidden="true">
+        <div class="flex gap-1.5 px-3 py-2.5 bg-slate-900 border-b border-slate-800">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+        </div>
+        <pre class="m-0 px-4 sm:px-5 py-4 font-mono text-xs sm:text-sm leading-7 text-slate-300 min-h-[110px] whitespace-pre-wrap break-words"><code id="heroTyped"></code><span id="heroCaret" class="inline-block w-[7px] h-[1em] bg-cyan-400 align-text-bottom animate-pulse"></span></pre>
+    </div>
+</section>
+
+<section class="max-w-5xl mx-auto px-6 pb-16 sm:pb-20 flex flex-col sm:flex-row items-stretch gap-4 opacity-0 translate-y-4 transition-all duration-700 ease-out" data-reveal>
+    <div class="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 transition-all duration-300 hover:border-cyan-400 hover:-translate-y-1">
+        <span class="inline-block text-[0.7rem] font-bold uppercase tracking-wider text-cyan-400 border border-cyan-400 rounded-full px-2.5 py-0.5 mb-3">dev</span>
+        <h2 class="text-lg font-semibold mb-2">Submit</h2>
+        <p class="text-slate-400 text-sm">Write or edit a prompt. Every submission becomes a new version, automatically.</p>
+    </div>
+    <div class="flex items-center justify-center text-slate-400 text-xl py-1 sm:py-0 rotate-90 sm:rotate-0" aria-hidden="true">&rarr;</div>
+    <div class="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 transition-all duration-300 hover:border-cyan-400 hover:-translate-y-1">
+        <span class="inline-block text-[0.7rem] font-bold uppercase tracking-wider text-cyan-400 border border-cyan-400 rounded-full px-2.5 py-0.5 mb-3">qa</span>
+        <h2 class="text-lg font-semibold mb-2">Verify</h2>
+        <p class="text-slate-400 text-sm">Validation, a content-safety check, and a trial generation run unattended before anything ships.</p>
+    </div>
+    <div class="flex items-center justify-center text-slate-400 text-xl py-1 sm:py-0 rotate-90 sm:rotate-0" aria-hidden="true">&rarr;</div>
+    <div class="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 transition-all duration-300 hover:border-cyan-400 hover:-translate-y-1">
+        <span class="inline-block text-[0.7rem] font-bold uppercase tracking-wider text-cyan-400 border border-cyan-400 rounded-full px-2.5 py-0.5 mb-3">prod</span>
+        <h2 class="text-lg font-semibold mb-2">Publish</h2>
+        <p class="text-slate-400 text-sm">A first run generates a complete site or app; later edits send a targeted update instead of starting over.</p>
+    </div>
+</section>
+
+<section id="demo" class="max-w-3xl mx-auto px-6 pb-16 sm:pb-24 opacity-0 translate-y-4 transition-all duration-700 ease-out" data-reveal>
+    <div class="text-center mb-8">
+        <h2 class="text-xl sm:text-2xl font-semibold mb-2">See the pipeline run</h2>
+        <p class="text-slate-400">Type a prompt and watch it move through DEV &rarr; QA &rarr; PROD. This preview runs entirely in your browser — no account needed to try it.</p>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-7">
+        <div class="flex flex-col sm:flex-row gap-2.5 mb-6">
+            <input type="text" id="demoPrompt" maxlength="80" value="a landing page for a coffee shop" aria-label="Example prompt"
+                   class="flex-1 min-w-0 px-3 py-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+            <button type="button" id="demoRun"
+                    class="whitespace-nowrap px-6 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:opacity-60 disabled:cursor-default text-white font-semibold text-sm transition-colors">
+                Run pipeline
+            </button>
+        </div>
+
+        <ol class="flex flex-col gap-3.5 mb-5 list-none p-0 m-0">
+            <li class="demo-step flex gap-3.5 items-start p-3.5 rounded-lg border border-slate-800 bg-slate-950 transition-colors duration-300" data-step="dev">
+                <span class="step-icon flex-none w-7 h-7 rounded-full border-2 border-slate-700 text-slate-400 flex items-center justify-center text-xs font-bold transition-colors duration-300">1</span>
+                <div>
+                    <h4 class="uppercase tracking-wide text-xs font-semibold mb-1">dev</h4>
+                    <p class="step-status text-sm text-slate-400 m-0">Waiting</p>
+                </div>
+            </li>
+            <li class="demo-step flex gap-3.5 items-start p-3.5 rounded-lg border border-slate-800 bg-slate-950 transition-colors duration-300" data-step="qa">
+                <span class="step-icon flex-none w-7 h-7 rounded-full border-2 border-slate-700 text-slate-400 flex items-center justify-center text-xs font-bold transition-colors duration-300">2</span>
+                <div>
+                    <h4 class="uppercase tracking-wide text-xs font-semibold mb-1">qa</h4>
+                    <p class="step-status text-sm text-slate-400 m-0">Waiting</p>
+                    <ul class="flex flex-wrap gap-x-4 gap-y-2 mt-2.5 list-none p-0 m-0">
+                        <li class="check-item flex items-center gap-1.5 text-xs text-slate-400 transition-colors duration-300" data-check="validation">
+                            <span class="check-dot w-3 h-3 rounded-full border-2 border-slate-700 transition-colors duration-300"></span>Validation
+                        </li>
+                        <li class="check-item flex items-center gap-1.5 text-xs text-slate-400 transition-colors duration-300" data-check="safety">
+                            <span class="check-dot w-3 h-3 rounded-full border-2 border-slate-700 transition-colors duration-300"></span>Content safety
+                        </li>
+                        <li class="check-item flex items-center gap-1.5 text-xs text-slate-400 transition-colors duration-300" data-check="trial">
+                            <span class="check-dot w-3 h-3 rounded-full border-2 border-slate-700 transition-colors duration-300"></span>Trial generation
+                        </li>
+                        <li class="check-item flex items-center gap-1.5 text-xs text-slate-400 transition-colors duration-300" data-check="checkpoint">
+                            <span class="check-dot w-3 h-3 rounded-full border-2 border-slate-700 transition-colors duration-300"></span>Checkpoint
+                        </li>
+                    </ul>
+                </div>
+            </li>
+            <li class="demo-step flex gap-3.5 items-start p-3.5 rounded-lg border border-slate-800 bg-slate-950 transition-colors duration-300" data-step="prod">
+                <span class="step-icon flex-none w-7 h-7 rounded-full border-2 border-slate-700 text-slate-400 flex items-center justify-center text-xs font-bold transition-colors duration-300">3</span>
+                <div>
+                    <h4 class="uppercase tracking-wide text-xs font-semibold mb-1">prod</h4>
+                    <p class="step-status text-sm text-slate-400 m-0">Waiting</p>
+                </div>
+            </li>
+        </ol>
+
+        <div id="demoResult" hidden class="flex flex-wrap items-center gap-4 p-4 rounded-lg border border-emerald-500 bg-emerald-500/10">
+            <div id="demoResultIcon" class="flex-none w-10 h-10 rounded-lg bg-slate-950 flex items-center justify-center"></div>
+            <div class="flex-1 min-w-[140px]">
+                <strong id="demoResultTitle" class="block mb-0.5"></strong>
+                <p id="demoResultDesc" class="text-slate-400 text-sm m-0"></p>
+            </div>
+            <span class="text-emerald-400 font-bold text-sm whitespace-nowrap">Published &check;</span>
+        </div>
+    </div>
+</section>
+
+<section class="max-w-5xl mx-auto px-6 pb-20 sm:pb-24 grid grid-cols-1 sm:grid-cols-3 gap-6 opacity-0 translate-y-4 transition-all duration-700 ease-out" data-reveal>
+    <div class="p-5 rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 hover:border-cyan-400 hover:-translate-y-1">
+        <h3 class="text-base font-semibold mb-2.5">Content or app — inferred, not chosen</h3>
+        <p class="text-slate-400 text-sm">PromptVCS figures out whether your prompt describes a content site or a working app. No need to pick.</p>
+    </div>
+    <div class="p-5 rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 hover:border-cyan-400 hover:-translate-y-1">
+        <h3 class="text-base font-semibold mb-2.5">Every version, kept</h3>
+        <p class="text-slate-400 text-sm">Prompt history and build history are tracked independently, so a bad generation can be rolled back without re-running the prompt.</p>
+    </div>
+    <div class="p-5 rounded-xl border border-slate-800 bg-slate-900 transition-all duration-300 hover:border-cyan-400 hover:-translate-y-1">
+        <h3 class="text-base font-semibold mb-2.5">Web app or Web CLI</h3>
+        <p class="text-slate-400 text-sm">Reach PromptVCS here on the web, or from a browser-based terminal running the full CLI — nothing to download, both backed by the same pipeline.</p>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        (function () {
+            var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+            // ---- Scroll reveal ----
+            var revealEls = document.querySelectorAll('[data-reveal]');
+            if (reduceMotion) {
+                revealEls.forEach(function (el) {
+                    el.classList.remove('opacity-0', 'translate-y-4', 'transition-all', 'duration-700', 'ease-out');
+                });
+            } else if ('IntersectionObserver' in window) {
+                var io = new IntersectionObserver(function (entries) {
+                    entries.forEach(function (entry) {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.remove('opacity-0', 'translate-y-4');
+                            io.unobserve(entry.target);
+                        }
+                    });
+                }, { threshold: 0.15 });
+                revealEls.forEach(function (el) { io.observe(el); });
+            } else {
+                revealEls.forEach(function (el) { el.classList.remove('opacity-0', 'translate-y-4'); });
+            }
+
+            var heroCaret = document.getElementById('heroCaret');
+            if (reduceMotion && heroCaret) heroCaret.classList.remove('animate-pulse');
+
+            // ---- Hero terminal typewriter ----
+            var lineColors = { dim: 'text-slate-400', ok: 'text-emerald-400', '': 'text-slate-300' };
+            var heroLines = [
+                { text: '$ prompt-vcs create blog --content "a personal blog"', cls: '' },
+                { text: 'DEV → QA → PROD', cls: 'dim' },
+                { text: '✓ validation   ✓ content safety   ✓ trial generation', cls: 'ok' },
+                { text: 'Published ✓  your-prompt.promptvcs.app', cls: 'ok' }
+            ];
+            var heroBody = document.getElementById('heroTyped');
+            if (heroBody) {
+                (function loopHero() {
+                    heroBody.innerHTML = '';
+                    var i = 0;
+                    function typeLine() {
+                        if (i >= heroLines.length) {
+                            setTimeout(loopHero, 2200);
+                            return;
+                        }
+                        var lineDef = heroLines[i];
+                        var div = document.createElement('div');
+                        div.className = lineColors[lineDef.cls] || lineColors[''];
+                        heroBody.appendChild(div);
+                        var chars = lineDef.text.split('');
+                        var c = 0;
+                        (function typeChar() {
+                            if (c < chars.length) {
+                                div.textContent += chars[c];
+                                c++;
+                                setTimeout(typeChar, 18 + Math.random() * 22);
+                            } else {
+                                i++;
+                                setTimeout(typeLine, 260);
+                            }
+                        })();
+                    }
+                    typeLine();
+                })();
+            }
+
+            // ---- Interactive pipeline demo ----
+            var promptInput = document.getElementById('demoPrompt');
+            var runBtn = document.getElementById('demoRun');
+            var stepEls = {
+                dev: document.querySelector('[data-step="dev"]'),
+                qa: document.querySelector('[data-step="qa"]'),
+                prod: document.querySelector('[data-step="prod"]')
+            };
+            var checkEls = document.querySelectorAll('.check-item');
+            var resultEl = document.getElementById('demoResult');
+            var resultIcon = document.getElementById('demoResultIcon');
+            var resultTitle = document.getElementById('demoResultTitle');
+            var resultDesc = document.getElementById('demoResultDesc');
+            var running = false;
+
+            var STEP_CLASSES = ['border-slate-800', 'border-blue-500', 'border-emerald-500'];
+            var ICON_CLASSES = ['border-slate-700', 'text-slate-400', 'border-blue-500', 'text-blue-500', 'border-emerald-500', 'bg-emerald-500', 'text-slate-900'];
+
+            function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+            function setStep(step, state, text) {
+                var el = stepEls[step];
+                var icon = el.querySelector('.step-icon');
+                el.classList.remove.apply(el.classList, STEP_CLASSES);
+                icon.classList.remove.apply(icon.classList, ICON_CLASSES);
+                if (state === 'active') {
+                    el.classList.add('border-blue-500');
+                    icon.classList.add('border-blue-500', 'text-blue-500');
+                } else if (state === 'done') {
+                    el.classList.add('border-emerald-500');
+                    icon.classList.add('border-emerald-500', 'bg-emerald-500', 'text-slate-900');
+                } else {
+                    el.classList.add('border-slate-800');
+                    icon.classList.add('border-slate-700', 'text-slate-400');
+                }
+                el.querySelector('.step-status').textContent = text;
+            }
+
+            function setCheck(li, done) {
+                var dot = li.querySelector('.check-dot');
+                if (done) {
+                    li.classList.remove('text-slate-400');
+                    li.classList.add('text-slate-100');
+                    dot.classList.remove('border-slate-700');
+                    dot.classList.add('border-emerald-500', 'bg-emerald-500');
+                } else {
+                    li.classList.add('text-slate-400');
+                    li.classList.remove('text-slate-100');
+                    dot.classList.add('border-slate-700');
+                    dot.classList.remove('border-emerald-500', 'bg-emerald-500');
+                }
+            }
+
+            function resetDemo() {
+                Object.keys(stepEls).forEach(function (k) { setStep(k, null, 'Waiting'); });
+                checkEls.forEach(function (li) { setCheck(li, false); });
+                resultEl.hidden = true;
+            }
+
+            async function runDemo() {
+                if (running) return;
+                var text = (promptInput.value || '').trim();
+                if (!text) { promptInput.focus(); return; }
+                running = true;
+                runBtn.disabled = true;
+                runBtn.textContent = 'Running…';
+                resetDemo();
+
+                setStep('dev', 'active', 'Saving prompt version 1…');
+                await wait(450);
+                setStep('dev', 'done', 'Version 1 saved');
+
+                setStep('qa', 'active', 'Running checks…');
+                for (var i = 0; i < checkEls.length; i++) {
+                    await wait(360);
+                    setCheck(checkEls[i], true);
+                }
+                await wait(200);
+                setStep('qa', 'done', 'All checks passed');
+
+                setStep('prod', 'active', 'Generating build…');
+                await wait(750);
+
+                var isApp = /calculator|app|game|todo|to-do|convert|tool|tracker|counter|timer/i.test(text);
+                setStep('prod', 'done', 'Live');
+
+                resultTitle.textContent = isApp ? 'Generated as a functional app' : 'Generated as a content site';
+                resultDesc.textContent = isApp
+                    ? 'PromptVCS detected working-app intent in your prompt and built interactive logic for it.'
+                    : 'PromptVCS treated this as a content prompt and built matching markup and copy.';
+                resultIcon.innerHTML = isApp
+                    ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h5"/></svg>'
+                    : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><path d="M4 5h16v14H4z"/><path d="M4 9h16"/></svg>';
+                resultEl.hidden = false;
+
+                running = false;
+                runBtn.disabled = false;
+                runBtn.textContent = 'Run again';
+            }
+
+            if (runBtn) {
+                runBtn.addEventListener('click', runDemo);
+                promptInput.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') runDemo();
+                });
+            }
+        })();
+    </script>
+}

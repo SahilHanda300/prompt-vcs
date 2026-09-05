@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@ViewData["Title"] — PromptVCS</title>
+<link rel="icon" type="image/svg+xml" href="~/favicon.svg">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: {
+                    sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+                    mono: ['"SFMono-Regular"', 'Consolas', '"Liberation Mono"', 'Menlo', 'monospace']
+                }
+            }
+        }
+    };
+</script>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans antialiased overflow-x-hidden">
+<header class="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-8 py-4 border-b border-slate-800">
+    <a href="/" class="flex items-center gap-2 font-semibold text-base sm:text-lg">
+        <svg viewBox="0 0 64 64" aria-hidden="true" class="w-7 h-7">
+            <rect width="64" height="64" rx="14" fill="#0f172a" />
+            <path d="M18 20 L32 32 L18 44" fill="none" stroke="#22d3ee" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+            <rect x="36" y="38" width="14" height="6" rx="3" fill="#22d3ee" />
+        </svg>
+        <span>PromptVCS</span>
+    </a>
+    <nav class="flex items-center gap-3 sm:gap-5 text-sm">
+        <a href="/Login" class="hover:text-cyan-400 transition-colors">Log in</a>
+        <a href="/Register" class="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold transition-colors">Get started</a>
+    </nav>
+</header>
+
+<main class="flex-1">
+    @RenderBody()
+</main>
+
+<footer class="text-center py-6 text-slate-400 text-xs sm:text-sm border-t border-slate-800">
+    <span>PromptVCS — version control for prompts</span>
+</footer>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
