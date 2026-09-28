@@ -145,7 +145,11 @@ public class PublishRules
         await File.WriteAllTextAsync(Path.Combine(versionedDir, "index.html"), sanitized.Html, utf8NoBom);
         await File.WriteAllTextAsync(Path.Combine(siteDir, "index.html"), sanitized.Html, utf8NoBom);
 
-        return new PublishOutcome(true, buildVersion, $"/site/{record.Id}/", null);
+        // Points at this build's own versioned copy, not the shared
+        // "latest" copy at /site/{id}/ — otherwise every build's link in
+        // build history would show whatever is currently live instead of
+        // what that specific build actually produced.
+        return new PublishOutcome(true, buildVersion, $"/site/{record.Id}/v{buildVersion}/", null);
     }
 
     private static string BuildFirstRunPrompt(string promptName, string content)
