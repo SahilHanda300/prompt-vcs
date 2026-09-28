@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 
 namespace PromptVcs.Core;
@@ -26,12 +27,24 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
             return MockInvoke(prompt);
         }
 
+        var utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         var psi = new ProcessStartInfo
         {
             FileName = "claude",
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // Without these, .NET decodes the child process's stdout/stderr
+            // using Console.OutputEncoding — on Windows (where the Runner
+            // actually runs) that's the legacy OEM codepage, not UTF-8. The
+            // claude CLI emits real UTF-8 (×, √, π, ⌫, etc.), so without this
+            // those multi-byte sequences get misread as that codepage,
+            // corrupting them into mojibake before this code ever sees them —
+            // no amount of fixing the artifact-writing side (see
+            // ArtifactSanitizer) can undo damage done at decode time here.
+            StandardOutputEncoding = utf8NoBom,
+            StandardErrorEncoding = utf8NoBom,
+            StandardInputEncoding = utf8NoBom,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
@@ -96,15 +109,20 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
 
     private static ClaudeCodeResult MockInvoke(string prompt)
     {
-        if (prompt.Contains("respond with exactly SAFE or UNSAFE", StringComparison.OrdinalIgnoreCase))
-        {
-            return new ClaudeCodeResult(true, "SAFE\nNo concerning content detected.", false, null);
-        }
-        if (prompt.Contains("respond with JSON", StringComparison.OrdinalIgnoreCase))
-        {
-            return new ClaudeCodeResult(true, "{\"feasible\": true, \"summary\": \"Mock trial generation looks feasible.\"}", false, null);
-        }
         var html = "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Mock Artifact</title></head>\n<body><h1>Mock generated artifact</h1><p>Generated from a " + prompt.Length + "-character prompt.</p></body>\n</html>";
+
+        // PublishRules' combined first-run screen+generate prompt: JSON line, then a
+        // literal "===HTML===" marker, then raw (non-JSON-escaped) HTML.
+        if (prompt.Contains("===HTML===", StringComparison.Ordinal))
+        {
+            var combined = "{\"safe\": true, \"safetyReason\": \"No concerning content detected.\", \"feasible\": true, \"feasibilitySummary\": \"Mock feasibility check looks buildable.\"}\n===HTML===\n" + html;
+            return new ClaudeCodeResult(true, combined, false, null);
+        }
+        // Qa's own combined safety+feasibility-only prompt (no HTML expected).
+        if (prompt.Contains("respond with JSON", StringComparison.OrdinalIgnoreCase) && prompt.Contains("\"safe\"", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ClaudeCodeResult(true, "{\"safe\": true, \"safetyReason\": \"No concerning content detected.\", \"feasible\": true, \"feasibilitySummary\": \"Mock feasibility check looks buildable.\"}", false, null);
+        }
         return new ClaudeCodeResult(true, html, false, null);
     }
 }

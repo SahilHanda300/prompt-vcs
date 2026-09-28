@@ -37,9 +37,9 @@
                     <a href="@(Model.SiteBaseUrl + latestBuild.ArtifactUrl)" target="_blank" rel="noopener"
                        class="inline-block mt-3.5 text-cyan-400 hover:underline text-sm">View your site &rarr;</a>
                 }
-                @if (status.Failed && latestBuild != null && !string.IsNullOrEmpty(latestBuild.Detail) && status.Percent >= 80)
+                @if (status.Failed && !string.IsNullOrEmpty(status.Detail))
                 {
-                    <p class="mt-3.5 text-sm text-slate-400">@latestBuild.Detail</p>
+                    <p class="mt-3.5 text-sm text-slate-400">@status.Detail</p>
                 }
             </div>
         }

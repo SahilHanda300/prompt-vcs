@@ -18,13 +18,16 @@ public class Qa
     {
         var validation = RunValidation(content);
 
-        // No point spending Claude Code calls on a prompt that already failed local validation.
-        var contentSafety = validation.Passed
-            ? await RunContentSafetyAsync(content)
-            : new QaCheckResult(false, "Skipped: validation failed.");
-        var trialGeneration = validation.Passed && contentSafety.Passed
-            ? await RunTrialGenerationAsync(content)
-            : new QaCheckResult(false, "Skipped: prior check failed.");
+        // No point spending a Claude Code call on a prompt that already
+        // failed local validation. Content safety and feasibility are
+        // otherwise independent assessments of the same prompt text, so
+        // they're combined into one Claude Code call (RunSafetyAndFeasibilityAsync)
+        // instead of two sequential ones — same two real checks, half the
+        // subprocess/cache-creation overhead, since that overhead is paid
+        // per call, not per assessment.
+        var (contentSafety, trialGeneration) = validation.Passed
+            ? await RunSafetyAndFeasibilityAsync(content)
+            : (new QaCheckResult(false, "Skipped: validation failed."), new QaCheckResult(false, "Skipped: validation failed."));
 
         var passed = validation.Passed && contentSafety.Passed && trialGeneration.Passed;
 
@@ -35,7 +38,11 @@ public class Qa
             new QaChecks(validation, contentSafety, trialGeneration));
     }
 
-    private static QaCheckResult RunValidation(string content)
+    /// Public so Pipeline can validate standalone on the first-run path,
+    /// where safety/feasibility come from PublishRules.ScreenAndPublishFirstRunAsync
+    /// instead of RunAsync's own combined call — calling RunAsync there would
+    /// mean a redundant extra Claude Code call before the combined one.
+    public static QaCheckResult RunValidation(string content)
     {
         var sw = Stopwatch.StartNew();
         var trimmed = content.Trim();
@@ -50,33 +57,16 @@ public class Qa
         return new QaCheckResult(true, null, sw.ElapsedMilliseconds);
     }
 
-    private async Task<QaCheckResult> RunContentSafetyAsync(string content)
+    private async Task<(QaCheckResult ContentSafety, QaCheckResult TrialGeneration)> RunSafetyAndFeasibilityAsync(string content)
     {
         var prompt = string.Join("\n",
-            "You are a content safety screener for a tool that turns prompts into generated websites/apps.",
-            "Respond with exactly SAFE or UNSAFE on the first line, followed by a one-line reason.",
-            "Do not generate anything else.",
-            "",
-            "Prompt to screen:",
-            content);
-
-        var result = await _invoker.InvokeAsync(prompt);
-        if (!result.Ok)
-        {
-            return new QaCheckResult(false, result.Detail ?? "Content safety check failed to run.");
-        }
-        var firstLine = result.Text.Trim().Split('\n')[0].Trim().ToUpperInvariant();
-        return new QaCheckResult(firstLine.StartsWith("SAFE"), result.Text.Trim());
-    }
-
-    private async Task<QaCheckResult> RunTrialGenerationAsync(string content)
-    {
-        var prompt = string.Join("\n",
-            "You are evaluating feasibility for a tool that turns prompts into a generated single-page site or app.",
-            "Its users are non-technical and often write short, vague prompts (e.g. \"a landing page for a coffee shop\") — that is expected and completely fine, not a reason to fail. A vague prompt gives the generator creative freedom to fill in specifics; judge feasibility, not level of detail.",
-            "Mark feasible=true unless the prompt is empty/gibberish, or explicitly requires something a single self-contained HTML page cannot provide (e.g. a real multi-user backend, a database, server-side payments).",
-            "Respond with JSON only, no other text, in the form {\"feasible\": boolean, \"summary\": string}.",
-            "Do not generate the actual site or app — just assess whether something reasonable can be built from this.",
+            "You are screening a prompt for a tool that turns prompts into generated single-page sites/apps.",
+            "Its users are non-technical and often write short, vague prompts (e.g. \"a landing page for a coffee shop\") — that is expected and completely fine, not a reason to fail either check below. A vague prompt gives the generator creative freedom to fill in specifics.",
+            "Assess two independent things about the prompt:",
+            "1. safe — is it free of genuinely unsafe/harmful content? Being brief or vague is not unsafe.",
+            "2. feasible — can something reasonable be built from it as a single self-contained HTML page? Mark true unless the prompt is empty/gibberish, or explicitly requires something a single page structurally cannot provide (e.g. a real multi-user backend, a database, server-side payments).",
+            "Respond with JSON only, no other text, in the form {\"safe\": boolean, \"safetyReason\": string, \"feasible\": boolean, \"feasibilitySummary\": string}.",
+            "Do not generate the actual site or app.",
             "",
             "Prompt to evaluate:",
             content);
@@ -84,7 +74,8 @@ public class Qa
         var result = await _invoker.InvokeAsync(prompt);
         if (!result.Ok)
         {
-            return new QaCheckResult(false, result.Detail ?? "Trial generation failed to run.");
+            var failure = new QaCheckResult(false, result.Detail ?? "Safety/feasibility check failed to run.");
+            return (failure, failure);
         }
 
         try
@@ -93,13 +84,18 @@ public class Qa
             var end = result.Text.LastIndexOf('}');
             var jsonText = start >= 0 && end > start ? result.Text[start..(end + 1)] : result.Text;
             using var doc = JsonDocument.Parse(jsonText);
-            var feasible = doc.RootElement.TryGetProperty("feasible", out var f) && f.GetBoolean();
-            var summary = doc.RootElement.TryGetProperty("summary", out var s) ? s.GetString() : result.Text.Trim();
-            return new QaCheckResult(feasible, summary);
+
+            var safe = doc.RootElement.TryGetProperty("safe", out var safeProp) && safeProp.GetBoolean();
+            var safetyReason = doc.RootElement.TryGetProperty("safetyReason", out var reasonProp) ? reasonProp.GetString() : result.Text.Trim();
+            var feasible = doc.RootElement.TryGetProperty("feasible", out var feasibleProp) && feasibleProp.GetBoolean();
+            var summary = doc.RootElement.TryGetProperty("feasibilitySummary", out var summaryProp) ? summaryProp.GetString() : result.Text.Trim();
+
+            return (new QaCheckResult(safe, safetyReason), new QaCheckResult(feasible, summary));
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
-            return new QaCheckResult(false, $"Could not parse trial generation response: {result.Text.Trim()}");
+            var failure = new QaCheckResult(false, $"Could not parse safety/feasibility response: {result.Text.Trim()}");
+            return (failure, failure);
         }
     }
 }

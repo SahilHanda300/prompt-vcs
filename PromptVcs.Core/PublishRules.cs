@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
@@ -19,6 +20,8 @@ public record PublishOutcome(bool Ok, int BuildVersion, string? ArtifactRelative
 /// </summary>
 public class PublishRules
 {
+    private const string HtmlMarker = "===HTML===";
+
     private readonly IClaudeCodeInvoker _invoker;
     private readonly string _siteRootDir;
 
@@ -28,6 +31,8 @@ public class PublishRules
         _siteRootDir = siteRootDir;
     }
 
+    /// Update path only (Pipeline calls this when a prior successful build
+    /// exists) — one Claude Code call, diff-aware.
     public async Task<PublishOutcome> PublishAsync(PromptRecord record, int promptVersion, string content)
     {
         var buildVersion = record.Builds.Count + 1;
@@ -51,7 +56,83 @@ public class PublishRules
             return new PublishOutcome(false, buildVersion, null, claudeResult.Detail);
         }
 
-        var sanitized = ArtifactSanitizer.Sanitize(claudeResult.Text);
+        return await FinalizeArtifactAsync(record, buildVersion, claudeResult.Text);
+    }
+
+    /// First-run path only (Pipeline calls this when there is no prior
+    /// successful build) — combines the content-safety/feasibility
+    /// screening and the actual generation into ONE Claude Code call, to
+    /// cut latency further than QA's own combined call already does (see
+    /// Qa.RunSafetyAndFeasibilityAsync). Deliberately NOT used for updates:
+    /// BuildUpdatePrompt needs the diff + full previous artifact as
+    /// context, which doesn't fit cleanly into a single screen-then-generate
+    /// call the way a from-scratch first run does.
+    ///
+    /// The HTML is returned after a plain-text "===HTML===" marker, not as
+    /// a JSON string field — asking a model to correctly JSON-escape a
+    /// multi-KB HTML/CSS/JS document is a real reliability risk (quotes,
+    /// backslashes, newlines all need perfect escaping); a marker needs no
+    /// escaping at all and only costs one string search.
+    public async Task<(QaCheckResult Safety, QaCheckResult Feasibility, PublishOutcome Outcome)> ScreenAndPublishFirstRunAsync(
+        PromptRecord record, int promptVersion, string content)
+    {
+        var buildVersion = record.Builds.Count + 1;
+        var prompt = BuildFirstRunScreenAndGeneratePrompt(record.Name, content);
+
+        var claudeResult = await _invoker.InvokeAsync(prompt);
+        if (!claudeResult.Ok)
+        {
+            var failure = new QaCheckResult(false, claudeResult.Detail ?? "Screening call failed to run.");
+            return (failure, failure, new PublishOutcome(false, buildVersion, null, claudeResult.Detail));
+        }
+
+        var text = claudeResult.Text;
+        var markerIndex = text.IndexOf(HtmlMarker, StringComparison.Ordinal);
+        var metaText = markerIndex >= 0 ? text[..markerIndex] : text;
+        var html = markerIndex >= 0 ? text[(markerIndex + HtmlMarker.Length)..].TrimStart('\r', '\n') : null;
+
+        bool safe;
+        bool feasible;
+        string? safetyReason;
+        string? feasibilitySummary;
+        try
+        {
+            var start = metaText.IndexOf('{');
+            var end = metaText.LastIndexOf('}');
+            var jsonText = start >= 0 && end > start ? metaText[start..(end + 1)] : metaText;
+            using var doc = JsonDocument.Parse(jsonText);
+            safe = doc.RootElement.TryGetProperty("safe", out var safeProp) && safeProp.GetBoolean();
+            safetyReason = doc.RootElement.TryGetProperty("safetyReason", out var reasonProp) ? reasonProp.GetString() : metaText.Trim();
+            feasible = doc.RootElement.TryGetProperty("feasible", out var feasibleProp) && feasibleProp.GetBoolean();
+            feasibilitySummary = doc.RootElement.TryGetProperty("feasibilitySummary", out var summaryProp) ? summaryProp.GetString() : metaText.Trim();
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            var failure = new QaCheckResult(false, $"Could not parse screening response: {metaText.Trim()}");
+            return (failure, failure, new PublishOutcome(false, buildVersion, null, "Screening response unparseable."));
+        }
+
+        var safetyResult = new QaCheckResult(safe, safetyReason);
+        var feasibilityResult = new QaCheckResult(feasible, feasibilitySummary);
+
+        if (!safe || !feasible)
+        {
+            return (safetyResult, feasibilityResult, new PublishOutcome(false, buildVersion, null, "Skipped: did not pass screening."));
+        }
+
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            var missingHtml = new PublishOutcome(false, buildVersion, null, "Marked safe and feasible but no HTML was returned.");
+            return (safetyResult, feasibilityResult, missingHtml);
+        }
+
+        var outcome = await FinalizeArtifactAsync(record, buildVersion, html);
+        return (safetyResult, feasibilityResult, outcome);
+    }
+
+    private async Task<PublishOutcome> FinalizeArtifactAsync(PromptRecord record, int buildVersion, string rawHtml)
+    {
+        var sanitized = ArtifactSanitizer.Sanitize(rawHtml);
         if (!sanitized.Ok)
         {
             return new PublishOutcome(false, buildVersion, null, sanitized.Detail);
@@ -69,24 +150,68 @@ public class PublishRules
 
     private static string BuildFirstRunPrompt(string promptName, string content)
     {
-        return string.Join("\n",
+        return string.Join("\n", new[]
+        {
             "You are generating a complete, self-contained, single-file HTML artifact for a tool called PromptVCS.",
             "The people using this tool are non-technical and often describe what they want in just a few words. Treat brevity as creative freedom, not missing information — never ask for more detail, and never output something sparse, generic, or placeholder-looking.",
             "The output may be a content site or a fully functional interactive app (infer which from the prompt) — infer this yourself, do not ask.",
             "",
             "Quality bar, non-negotiable regardless of how short or vague the prompt is:",
-            "- Make confident, specific creative decisions to fill in anything unstated: invent a plausible name/brand, tagline, and realistic body copy that fits the theme. Never use placeholder text like 'Lorem ipsum', '[Your text here]', 'Company Name', or similar.",
-            "- Produce a genuinely polished visual design: a cohesive modern color palette, readable typography with a clear hierarchy, sensible spacing, and multiple relevant sections — not a single heading and a paragraph.",
-            "- If the prompt describes an app or tool (a calculator, a todo list, a converter, a game, etc.), implement REAL working functionality in JavaScript — actual computation, state, and interactivity. Never ship a static mockup or a button that does nothing.",
-            "- Fully responsive at phone width and up.",
+        }
+        .Concat(QualityBarLines())
+        .Concat(new[]
+        {
             "",
             "Requirements: a single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external fonts or images), include a viewport meta tag and a descriptive <title> tag.",
             "Respond with ONLY the HTML document — no explanation, no markdown code fences.",
             "",
             $"Prompt name: {promptName}",
             "Prompt:",
-            content);
+            content,
+        }));
     }
+
+    private static string BuildFirstRunScreenAndGeneratePrompt(string promptName, string content)
+    {
+        return string.Join("\n", new[]
+        {
+            "You are screening a prompt AND, if appropriate, generating the resulting artifact for a tool called PromptVCS — both in this one response.",
+            "The people using this tool are non-technical and often describe what they want in just a few words. Treat brevity as creative freedom, not missing information — never ask for more detail, and this is not a reason to fail either check below.",
+            "",
+            "First, assess two independent things about the prompt:",
+            "1. safe — is it free of genuinely unsafe/harmful content? Being brief or vague is not unsafe.",
+            "2. feasible — can something reasonable be built from it as a single self-contained HTML page? Mark true unless the prompt is empty/gibberish, or explicitly requires something a single page structurally cannot provide (e.g. a real multi-user backend, a database, server-side payments).",
+            "",
+            "Then, ONLY if both are true, generate the artifact — a content site or a fully functional interactive app, inferred from the prompt yourself.",
+            "",
+            "Quality bar for the artifact, non-negotiable regardless of how short or vague the prompt is:",
+        }
+        .Concat(QualityBarLines())
+        .Concat(new[]
+        {
+            "- A single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external fonts or images), a viewport meta tag, and a descriptive <title> tag.",
+            "",
+            "Respond in EXACTLY this format and nothing else:",
+            "Line 1: a single-line JSON object {\"safe\": boolean, \"safetyReason\": string, \"feasible\": boolean, \"feasibilitySummary\": string}",
+            $"If safe and feasible are both true: immediately after, a line containing exactly {HtmlMarker} , then the complete HTML document — raw, NOT JSON-escaped, NOT wrapped in markdown code fences, nothing else after it.",
+            "If either is false: output nothing after the JSON line.",
+            "",
+            $"Prompt name: {promptName}",
+            "Prompt:",
+            content,
+        }));
+    }
+
+    /// Shared between BuildFirstRunPrompt and BuildFirstRunScreenAndGeneratePrompt
+    /// so the two generation prompts can't silently drift apart.
+    private static IEnumerable<string> QualityBarLines() => new[]
+    {
+        "- Make confident, specific creative decisions to fill in anything unstated: invent a plausible name/brand, tagline, and realistic body copy that fits the theme. Never use placeholder text like 'Lorem ipsum', '[Your text here]', 'Company Name', or similar.",
+        "- Produce a genuinely polished visual design: a cohesive modern color palette, readable typography with a clear hierarchy, sensible spacing, and multiple relevant sections — not a single heading and a paragraph.",
+        "- If the prompt describes an app or tool (a calculator, a todo list, a converter, a game, etc.), implement REAL working functionality in JavaScript — actual computation, state, and interactivity. Never ship a static mockup or a button that does nothing.",
+        "- Handle the range of input a real (non-technical) person would reasonably type, not just the narrowest valid case. For example, a calculator should accept natural notation like implicit multiplication ('8cos(6)', '2(3+4)', '3π') rather than showing a bare error for it; a form should tolerate minor formatting variation. Only show an error for genuinely invalid input, and make it specific, not just the word 'Error'.",
+        "- Fully responsive at phone width and up.",
+    };
 
     private static string BuildUpdatePrompt(string promptName, string previousContent, string newContent, string previousArtifact)
     {

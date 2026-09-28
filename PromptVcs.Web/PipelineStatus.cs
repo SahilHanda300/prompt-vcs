@@ -5,13 +5,16 @@ namespace PromptVcs.Web;
 /// run landed — for non-technical users who shouldn't need to understand
 /// "dev/qa/prod" or read a raw QA checkpoint to know what happened.
 /// </summary>
-public record PipelineStatusInfo(string Message, int Percent, bool Failed);
+public record PipelineStatusInfo(string Message, int Percent, bool Failed, string? Detail = null);
 
 public static class PipelineStatus
 {
     /// Full detail available (Pages/Prompt.cshtml): uses the latest
     /// version's actual QA checkpoint to say exactly which stage it's at
-    /// or which check it failed.
+    /// or which check it failed. Detail carries the actual reason (the
+    /// check's own Detail text) so a failure is never a dead end — this
+    /// matters especially for content-safety/feasibility failures, which
+    /// can otherwise look like an unexplained rejection.
     public static PipelineStatusInfo ForRecord(PromptRecordDto record)
     {
         if (record.History.Count == 0)
@@ -29,15 +32,15 @@ public static class PipelineStatus
         }
         if (!checkpoint.Checks.Validation.Passed)
         {
-            return new PipelineStatusInfo("Your prompt didn't pass validation", 20, true);
+            return new PipelineStatusInfo("Your prompt didn't pass validation", 20, true, checkpoint.Checks.Validation.Detail);
         }
         if (!checkpoint.Checks.ContentSafety.Passed)
         {
-            return new PipelineStatusInfo("Your prompt didn't pass the content safety check", 40, true);
+            return new PipelineStatusInfo("Your prompt didn't pass the content safety check", 40, true, checkpoint.Checks.ContentSafety.Detail);
         }
         if (!checkpoint.Checks.TrialGeneration.Passed)
         {
-            return new PipelineStatusInfo("Your prompt didn't pass the feasibility check", 60, true);
+            return new PipelineStatusInfo("Your prompt didn't pass the feasibility check", 60, true, checkpoint.Checks.TrialGeneration.Detail);
         }
         if (build == null)
         {
@@ -47,7 +50,7 @@ public static class PipelineStatus
         {
             return new PipelineStatusInfo("Your prompt passed QA and was published", 100, false);
         }
-        return new PipelineStatusInfo("Your prompt passed QA, but publishing failed", 80, true);
+        return new PipelineStatusInfo("Your prompt passed QA, but publishing failed", 80, true, build.Detail);
     }
 
     /// Coarser version for Pages/Dashboard.cshtml, which only has the
