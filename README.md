@@ -10,7 +10,7 @@ manual QA gate, no mode-picking between "content site" and "functional app."
 ## What it does
 
 1. You submit a prompt (e.g. *"a landing page for a coffee shop"* or *"a
-   scientific calculator"*) through the web app or the CLI.
+   scientific calculator"*) through the web app.
 2. The pipeline runs automatically, with no further action from you:
    - **DEV** — the new prompt version is recorded.
    - **QA** — four checks run: local validation, a content-safety check, a
@@ -25,34 +25,34 @@ manual QA gate, no mode-picking between "content site" and "functional app."
 ## Architecture
 
 ```
-Web app (PromptVcs.Web)          CLI (prompt-vcs.exe) / browser /terminal
-        \                                    /
-         \        MCP tool calls over HTTP  /
-          v                                v
+                Web (PromptVcs.Web)
+   dashboard + browser-based terminal, one app
+                        |
+                        | MCP tool calls over HTTP
+                        v
               MCP server (mcp-server, Render)
         owns the store (MongoDB), the pipeline, QA, and
         publish-rules engine — decides *how* to build/update
         a site, not just a pass-through
-                       |
-                       | dispatches Claude Code jobs over SignalR
-                       v
+                        |
+                        | dispatches Claude Code jobs over SignalR
+                        v
         Runner agent (PromptVcs.Runner — on your own machine)
         the only component that ever invokes Claude Code, under
         your own Claude Pro login
 ```
 
-Five C# projects, tied together by `PromptVCS.slnx`:
+Four C# projects, tied together by `PromptVCS.slnx`:
 
 | Project | Role |
 |---|---|
 | `PromptVcs.Core` | Shared server + runner domain logic: pipeline, QA, publish rules, artifact sanitizing, Claude Code invocation. |
-| `mcp-server` (`PromptVcs.McpServer`) | ASP.NET Core app hosting the MCP tools, the Runner's SignalR hub, and the MongoDB-backed store/auth. Also serves generated artifacts as static files. |
+| `mcp-server` (`PromptVcs.McpServer`) | ASP.NET Core app hosting the MCP tools, the Runner's SignalR hub, and the MongoDB-backed store/auth. Also serves generated artifacts as static files, and a browser-based terminal. |
 | `PromptVcs.Runner` | Console app that connects to the server's SignalR hub and is the **only** process that ever runs real Claude Code, authenticated via your Claude Pro login. |
-| `PromptVcs.Cli` | Thin MCP client (`prompt-vcs` binary). No dependency on `PromptVcs.Core` — every command is one MCP tool call. Also usable as a browser-based terminal via `/terminal`. |
-| `PromptVcs.Web` | ASP.NET Core Razor Pages web app — also a thin MCP client, with cookie-based auth, a dashboard, and the prompt detail/diff/edit pages. |
+| `PromptVcs.Web` | ASP.NET Core Razor Pages web app — a thin MCP client with cookie-based auth, a dashboard, and the prompt detail/diff/edit pages. |
 
-The CLI and the Runner never talk to each other directly — both only ever
-talk to the MCP server (hub-and-spoke).
+Web never talks to the Runner directly — both only ever talk to the MCP
+server (hub-and-spoke).
 
 ## Data model
 
@@ -121,15 +121,11 @@ spending real usage.
 
 ### 3. Use it
 
-- **Web app**: `dotnet run --project PromptVcs.Web`, then open
-  `http://localhost:5285`. Register an account (the first user ever
-  registered becomes admin automatically), then create/edit prompts from
-  the dashboard.
-- **CLI**: `dotnet run --project PromptVcs.Cli -- register <user> <pass>`,
-  then `login`, `create`, `edit`, `list`, `show`, `diff` — run with no
-  arguments for an interactive REPL. Points at
-  `http://localhost:5279/mcp` by default; override with
-  `PROMPTVCS_MCP_URL`.
+Run `dotnet run --project PromptVcs.Web`, then open `http://localhost:5285`.
+Register an account (the first user ever registered becomes admin
+automatically), then create/edit prompts from the dashboard. A
+terminal-style CLI is also reachable in the browser via the MCP server's
+`/terminal` page, if you'd rather type commands than click through the UI.
 
 ## Deployment
 
