@@ -86,7 +86,7 @@
             }
         </div>
 
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 mb-10">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6">
             <h2 class="text-lg font-semibold mb-4">Compare versions</h2>
             <form method="get" class="flex flex-wrap items-end gap-3 mb-5">
                 <input type="hidden" name="name" value="@Model.Name" />
@@ -95,7 +95,7 @@
                     <select id="V1" name="V1" class="px-3 py-2 rounded-lg border border-slate-700 bg-slate-950 text-slate-100 text-sm">
                         @foreach (var v in record.History)
                         {
-                            <option value="@v.Version" selected="@(Model.V1 == v.Version)">v@(v.Version)</option>
+                            <option value="@v.Version" selected="@(Model.V1 == v.Version)">v@(v.Version) — @v.CreatedAt.ToLocalTime().ToString("MMM d, h:mm tt")</option>
                         }
                     </select>
                 </div>
@@ -104,7 +104,7 @@
                     <select id="V2" name="V2" class="px-3 py-2 rounded-lg border border-slate-700 bg-slate-950 text-slate-100 text-sm">
                         @foreach (var v in record.History)
                         {
-                            <option value="@v.Version" selected="@(Model.V2 == v.Version)">v@(v.Version)</option>
+                            <option value="@v.Version" selected="@(Model.V2 == v.Version)">v@(v.Version) — @v.CreatedAt.ToLocalTime().ToString("MMM d, h:mm tt")</option>
                         }
                     </select>
                 </div>
@@ -113,6 +113,21 @@
 
             @if (Model.DiffLines != null)
             {
+                var added = Model.DiffLines.Count(l => l.Type == "inserted");
+                var removed = Model.DiffLines.Count(l => l.Type == "deleted");
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-slate-400">
+                    <span>Comparing v@(Model.V1) &rarr; v@(Model.V2)</span>
+                    <span class="text-emerald-400">+@added</span>
+                    <span class="text-red-400">-@removed</span>
+                    @if (record.Environments.Prod == Model.V1)
+                    {
+                        <span class="px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-400">v@(Model.V1) is live</span>
+                    }
+                    @if (record.Environments.Prod == Model.V2)
+                    {
+                        <span class="px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-400">v@(Model.V2) is live</span>
+                    }
+                </div>
                 <div class="rounded-lg border border-slate-800 overflow-hidden font-mono text-xs">
                     @foreach (var line in Model.DiffLines)
                     {
@@ -125,34 +140,6 @@
                         };
                         var prefix = line.Type switch { "inserted" => "+", "deleted" => "-", _ => " " };
                         <div class="@rowClass px-3 py-1 whitespace-pre-wrap break-words">@prefix @line.Text</div>
-                    }
-                </div>
-            }
-        </div>
-
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6">
-            <h2 class="text-lg font-semibold mb-4">Build history</h2>
-            @if (record.Builds.Count == 0)
-            {
-                <p class="text-slate-400 text-sm">No builds yet.</p>
-            }
-            else
-            {
-                <div class="flex flex-col gap-2">
-                    @foreach (var build in record.Builds.AsEnumerable().Reverse())
-                    {
-                        var built = build.Status == "success";
-                        <div class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border border-slate-800 bg-slate-950 text-sm">
-                            <span>Build v@(build.BuildVersion) <span class="text-slate-400">(prompt v@(build.PromptVersion))</span></span>
-                            @if (built && !string.IsNullOrEmpty(build.ArtifactUrl))
-                            {
-                                <a href="@(Model.SiteBaseUrl + build.ArtifactUrl)" target="_blank" rel="noopener" class="text-cyan-400 hover:underline">View</a>
-                            }
-                            else
-                            {
-                                <span class="text-red-400">Failed</span>
-                            }
-                        </div>
                     }
                 </div>
             }
