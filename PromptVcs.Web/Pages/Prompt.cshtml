@@ -1,0 +1,175 @@
+@page "{name}"
+@model PromptVcs.Web.Pages.PromptModel
+@{
+    ViewData["Title"] = Model.Name;
+    var latestBuild = Model.Record?.Builds.LastOrDefault();
+}
+
+<section class="max-w-3xl mx-auto px-6 py-12 sm:py-16">
+    <a asp-page="/Dashboard" class="text-sm text-slate-400 hover:text-cyan-400 transition-colors">&larr; All prompts</a>
+
+    @if (Model.ErrorMessage != null)
+    {
+        <div class="mt-4 px-4 py-3 rounded-lg border border-red-500 bg-red-500/10 text-red-400 text-sm">@Model.ErrorMessage</div>
+    }
+
+    @if (Model.Record != null)
+    {
+        var record = Model.Record;
+
+        <h1 class="text-2xl sm:text-3xl font-bold mt-4 mb-3">@record.Name</h1>
+
+        <div class="flex flex-wrap items-center gap-2 text-xs mb-8">
+            @if (record.Environments.Dev.HasValue)
+            {
+                <span class="px-2 py-0.5 rounded-full border border-cyan-400 text-cyan-400">dev v@(record.Environments.Dev)</span>
+            }
+            @if (record.Environments.Qa.HasValue)
+            {
+                <span class="px-2 py-0.5 rounded-full border border-blue-500 text-blue-400">qa v@(record.Environments.Qa)</span>
+            }
+            @if (record.Environments.Prod.HasValue)
+            {
+                <span class="px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-400">prod v@(record.Environments.Prod)</span>
+            }
+        </div>
+
+        @if (latestBuild != null)
+        {
+            var isPublished = latestBuild.Status == "success";
+            <div class="flex flex-wrap items-center gap-3 mb-10 p-4 rounded-lg border @(isPublished ? "border-emerald-500 bg-emerald-500/10" : "border-red-500 bg-red-500/10")">
+                @if (isPublished)
+                {
+                    <span class="text-emerald-400 font-bold text-sm">Published &check;</span>
+                    @if (!string.IsNullOrEmpty(latestBuild.ArtifactUrl))
+                    {
+                        <a href="@(Model.SiteBaseUrl + latestBuild.ArtifactUrl)" target="_blank" rel="noopener"
+                           class="text-cyan-400 hover:underline text-sm">@(Model.SiteBaseUrl + latestBuild.ArtifactUrl)</a>
+                    }
+                }
+                else
+                {
+                    <span class="text-red-400 font-bold text-sm">Build failed</span>
+                    @if (!string.IsNullOrEmpty(latestBuild.Detail))
+                    {
+                        <span class="text-slate-400 text-sm">@latestBuild.Detail</span>
+                    }
+                }
+            </div>
+        }
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 mb-10">
+            <h2 class="text-lg font-semibold mb-4">Submit an edit</h2>
+            <p class="text-slate-400 text-sm mb-4">Runs the whole pipeline again from a new version — no separate promote step.</p>
+            <form method="post" asp-page-handler="Edit" class="flex flex-col gap-4">
+                <textarea name="EditContent" required rows="6"
+                          class="w-full px-3 py-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-cyan-400">@Model.EditContent</textarea>
+                <button type="submit"
+                        class="self-start px-6 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition-colors">
+                    Submit &amp; run pipeline
+                </button>
+            </form>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 mb-10">
+            <h2 class="text-lg font-semibold mb-4">QA history</h2>
+            @if (record.QaCheckpoints.Count == 0)
+            {
+                <p class="text-slate-400 text-sm">No QA checkpoints yet.</p>
+            }
+            else
+            {
+                <div class="flex flex-col gap-3">
+                    @foreach (var checkpoint in record.QaCheckpoints.AsEnumerable().Reverse())
+                    {
+                        <div class="p-3.5 rounded-lg border @(checkpoint.Passed ? "border-slate-800" : "border-red-500/60") bg-slate-950">
+                            <div class="flex items-center justify-between text-sm mb-2">
+                                <span class="font-medium">Version @checkpoint.Version</span>
+                                <span class="@(checkpoint.Passed ? "text-emerald-400" : "text-red-400") font-medium">
+                                    @(checkpoint.Passed ? "Passed" : "Failed")
+                                </span>
+                            </div>
+                            <div class="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-slate-400">
+                                <span>@(checkpoint.Checks.Validation.Passed ? "✓" : "✗") Validation</span>
+                                <span>@(checkpoint.Checks.ContentSafety.Passed ? "✓" : "✗") Content safety</span>
+                                <span>@(checkpoint.Checks.TrialGeneration.Passed ? "✓" : "✗") Trial generation</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 mb-10">
+            <h2 class="text-lg font-semibold mb-4">Compare versions</h2>
+            <form method="get" class="flex flex-wrap items-end gap-3 mb-5">
+                <input type="hidden" name="name" value="@Model.Name" />
+                <div>
+                    <label for="V1" class="block text-xs font-medium mb-1.5 text-slate-400">From</label>
+                    <select id="V1" name="V1" class="px-3 py-2 rounded-lg border border-slate-700 bg-slate-950 text-slate-100 text-sm">
+                        @foreach (var v in record.History)
+                        {
+                            <option value="@v.Version" selected="@(Model.V1 == v.Version)">v@(v.Version)</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="V2" class="block text-xs font-medium mb-1.5 text-slate-400">To</label>
+                    <select id="V2" name="V2" class="px-3 py-2 rounded-lg border border-slate-700 bg-slate-950 text-slate-100 text-sm">
+                        @foreach (var v in record.History)
+                        {
+                            <option value="@v.Version" selected="@(Model.V2 == v.Version)">v@(v.Version)</option>
+                        }
+                    </select>
+                </div>
+                <button type="submit" class="px-5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-sm transition-colors">Diff</button>
+            </form>
+
+            @if (Model.DiffLines != null)
+            {
+                <div class="rounded-lg border border-slate-800 overflow-hidden font-mono text-xs">
+                    @foreach (var line in Model.DiffLines)
+                    {
+                        var rowClass = line.Type switch
+                        {
+                            "inserted" => "bg-emerald-500/10 text-emerald-300 border-l-2 border-emerald-500",
+                            "deleted" => "bg-red-500/10 text-red-300 border-l-2 border-red-500",
+                            "modified" => "bg-yellow-500/10 text-yellow-200 border-l-2 border-yellow-500",
+                            _ => "text-slate-400 border-l-2 border-transparent",
+                        };
+                        var prefix = line.Type switch { "inserted" => "+", "deleted" => "-", _ => " " };
+                        <div class="@rowClass px-3 py-1 whitespace-pre-wrap break-words">@prefix @line.Text</div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6">
+            <h2 class="text-lg font-semibold mb-4">Build history</h2>
+            @if (record.Builds.Count == 0)
+            {
+                <p class="text-slate-400 text-sm">No builds yet.</p>
+            }
+            else
+            {
+                <div class="flex flex-col gap-2">
+                    @foreach (var build in record.Builds.AsEnumerable().Reverse())
+                    {
+                        var built = build.Status == "success";
+                        <div class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border border-slate-800 bg-slate-950 text-sm">
+                            <span>Build v@(build.BuildVersion) <span class="text-slate-400">(prompt v@(build.PromptVersion))</span></span>
+                            @if (built && !string.IsNullOrEmpty(build.ArtifactUrl))
+                            {
+                                <a href="@(Model.SiteBaseUrl + build.ArtifactUrl)" target="_blank" rel="noopener" class="text-cyan-400 hover:underline">View</a>
+                            }
+                            else
+                            {
+                                <span class="text-red-400">Failed</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</section>

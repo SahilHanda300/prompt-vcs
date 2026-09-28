@@ -1,0 +1,86 @@
+@page
+@model PromptVcs.Web.Pages.DashboardModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<section class="max-w-3xl mx-auto px-6 py-12 sm:py-16">
+    <h1 class="text-2xl sm:text-3xl font-bold mb-2">Your prompts</h1>
+    <p class="text-slate-400 mb-8">Every submission runs the pipeline automatically — dev &rarr; qa &rarr; prod, no manual step.</p>
+
+    @if (Model.ErrorMessage != null)
+    {
+        <div class="mb-6 px-4 py-3 rounded-lg border border-red-500 bg-red-500/10 text-red-400 text-sm">@Model.ErrorMessage</div>
+    }
+
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 mb-10">
+        <h2 class="text-lg font-semibold mb-4">New prompt</h2>
+        <form method="post" asp-page-handler="Create" class="flex flex-col gap-4">
+            <div>
+                <label for="NewPromptName" class="block text-sm font-medium mb-1.5">Name</label>
+                <input type="text" id="NewPromptName" name="NewPromptName" value="@Model.NewPromptName" required maxlength="80"
+                       placeholder="e.g. coffee-shop-landing"
+                       class="w-full px-3 py-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+            </div>
+            <div>
+                <label for="NewPromptContent" class="block text-sm font-medium mb-1.5">Prompt</label>
+                <textarea id="NewPromptContent" name="NewPromptContent" required rows="4"
+                          placeholder="Describe the site or app you want..."
+                          class="w-full px-3 py-2.5 rounded-lg border border-slate-700 bg-slate-950 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400">@Model.NewPromptContent</textarea>
+            </div>
+            <button type="submit"
+                    class="self-start px-6 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition-colors">
+                Submit &amp; run pipeline
+            </button>
+        </form>
+    </div>
+
+    <h2 class="text-lg font-semibold mb-4">Existing prompts</h2>
+
+    @if (Model.Prompts.Count == 0)
+    {
+        <p class="text-slate-400 text-sm">No prompts yet — submit one above to get started.</p>
+    }
+    else
+    {
+        <div class="flex flex-col gap-3">
+            @foreach (var p in Model.Prompts)
+            {
+                <a asp-page="/Prompt" asp-route-name="@p.Name"
+                   class="block bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 transition-all duration-200 hover:border-cyan-400 hover:-translate-y-0.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="font-semibold">@p.Name</span>
+                        <div class="flex items-center gap-2 text-xs">
+                            @if (p.Dev.HasValue)
+                            {
+                                <span class="px-2 py-0.5 rounded-full border border-cyan-400 text-cyan-400">dev v@(p.Dev)</span>
+                            }
+                            @if (p.Qa.HasValue)
+                            {
+                                <span class="px-2 py-0.5 rounded-full border border-blue-500 text-blue-400">qa v@(p.Qa)</span>
+                            }
+                            @if (p.Prod.HasValue)
+                            {
+                                <span class="px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-400">prod v@(p.Prod)</span>
+                            }
+                        </div>
+                    </div>
+                    @if (p.LatestBuild != null)
+                    {
+                        <div class="mt-2 text-xs text-slate-400">
+                            Latest build v@(p.LatestBuild.BuildVersion) —
+                            @if (p.LatestBuild.Status == "success")
+                            {
+                                <span class="text-emerald-400 font-medium">Published &check;</span>
+                            }
+                            else
+                            {
+                                <span class="text-red-400 font-medium">Failed</span>
+                            }
+                        </div>
+                    }
+                </a>
+            }
+        </div>
+    }
+</section>

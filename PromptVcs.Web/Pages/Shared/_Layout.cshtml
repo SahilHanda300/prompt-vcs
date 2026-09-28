@@ -30,8 +30,19 @@
         <span>PromptVCS</span>
     </a>
     <nav class="flex items-center gap-3 sm:gap-5 text-sm">
-        <a href="/Login" class="hover:text-cyan-400 transition-colors">Log in</a>
-        <a href="/Register" class="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold transition-colors">Get started</a>
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <span class="hidden sm:inline text-slate-400">@User.Identity!.Name</span>
+            <a href="/Dashboard" class="hover:text-cyan-400 transition-colors">Dashboard</a>
+            <form method="post" asp-page="/Logout" class="inline">
+                <button type="submit" class="px-4 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold transition-colors">Log out</button>
+            </form>
+        }
+        else
+        {
+            <a href="/Login" class="hover:text-cyan-400 transition-colors">Log in</a>
+            <a href="/Register" class="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold transition-colors">Get started</a>
+        }
     </nav>
 </header>
 

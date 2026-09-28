@@ -1,3 +1,6 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
+using PromptVcs.Web;
+
 const string DefaultPort = "5285";
 // Render (and most PaaS hosts) inject PORT and expect the app to bind it;
 // PROMPTVCS_WEB_PORT stays as a manual override for local/other-host use.
@@ -11,7 +14,24 @@ var builder = WebApplication.CreateBuilder(args);
 // container) couldn't reach the app at all if it bound to localhost.
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-builder.Services.AddRazorPages();
+builder.Services.AddSingleton<ServerClient>();
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "PromptVcsWebAuth";
+        options.LoginPath = "/Login";
+        // Matches MongoAuthService.SessionLifetime server-side — the cookie
+        // shouldn't outlive the session token it carries.
+        options.ExpireTimeSpan = TimeSpan.FromDays(30);
+        options.SlidingExpiration = true;
+    });
+
+builder.Services.AddRazorPages(options =>
+{
+    options.Conventions.AuthorizePage("/Dashboard");
+    options.Conventions.AuthorizePage("/Prompt");
+});
 
 var app = builder.Build();
 
@@ -22,6 +42,8 @@ if (!app.Environment.IsDevelopment())
 
 app.UseStaticFiles();
 app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapRazorPages();
 
 app.Run();
