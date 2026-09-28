@@ -6,7 +6,7 @@
 
 <section class="max-w-3xl mx-auto px-6 py-12 sm:py-16">
     <h1 class="text-2xl sm:text-3xl font-bold mb-2">Your prompts</h1>
-    <p class="text-slate-400 mb-8">Every submission runs the pipeline automatically — dev &rarr; qa &rarr; prod, no manual step.</p>
+    <p class="text-slate-400 mb-8">Every submission is checked and published automatically — no manual steps.</p>
 
     @if (Model.ErrorMessage != null)
     {
@@ -46,39 +46,18 @@
         <div class="flex flex-col gap-3">
             @foreach (var p in Model.Prompts)
             {
+                var itemStatus = PromptVcs.Web.PipelineStatus.ForListItem(p);
                 <a asp-page="/Prompt" asp-route-name="@p.Name"
                    class="block bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 transition-all duration-200 hover:border-cyan-400 hover:-translate-y-0.5">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
                         <span class="font-semibold">@p.Name</span>
-                        <div class="flex items-center gap-2 text-xs">
-                            @if (p.Dev.HasValue)
-                            {
-                                <span class="px-2 py-0.5 rounded-full border border-cyan-400 text-cyan-400">dev v@(p.Dev)</span>
-                            }
-                            @if (p.Qa.HasValue)
-                            {
-                                <span class="px-2 py-0.5 rounded-full border border-blue-500 text-blue-400">qa v@(p.Qa)</span>
-                            }
-                            @if (p.Prod.HasValue)
-                            {
-                                <span class="px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-400">prod v@(p.Prod)</span>
-                            }
-                        </div>
+                        <span class="text-xs @(itemStatus.Failed ? "text-red-400" : itemStatus.Percent == 100 ? "text-emerald-400" : "text-slate-400")">
+                            @itemStatus.Message (@itemStatus.Percent%)
+                        </span>
                     </div>
-                    @if (p.LatestBuild != null)
-                    {
-                        <div class="mt-2 text-xs text-slate-400">
-                            Latest build v@(p.LatestBuild.BuildVersion) —
-                            @if (p.LatestBuild.Status == "success")
-                            {
-                                <span class="text-emerald-400 font-medium">Published &check;</span>
-                            }
-                            else
-                            {
-                                <span class="text-red-400 font-medium">Failed</span>
-                            }
-                        </div>
-                    }
+                    <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div class="h-full rounded-full @(itemStatus.Failed ? "bg-red-500" : "bg-emerald-500")" style="width: @(itemStatus.Percent)%"></div>
+                    </div>
                 </a>
             }
         </div>

@@ -73,8 +73,10 @@ public class Qa
     {
         var prompt = string.Join("\n",
             "You are evaluating feasibility for a tool that turns prompts into a generated single-page site or app.",
+            "Its users are non-technical and often write short, vague prompts (e.g. \"a landing page for a coffee shop\") — that is expected and completely fine, not a reason to fail. A vague prompt gives the generator creative freedom to fill in specifics; judge feasibility, not level of detail.",
+            "Mark feasible=true unless the prompt is empty/gibberish, or explicitly requires something a single self-contained HTML page cannot provide (e.g. a real multi-user backend, a database, server-side payments).",
             "Respond with JSON only, no other text, in the form {\"feasible\": boolean, \"summary\": string}.",
-            "Do not generate the actual site or app — just assess whether the prompt is clear and buildable.",
+            "Do not generate the actual site or app — just assess whether something reasonable can be built from this.",
             "",
             "Prompt to evaluate:",
             content);
