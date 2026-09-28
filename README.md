@@ -6,7 +6,6 @@ self-contained site or app generated from it. No manual "promote" step, no
 manual QA gate, no mode-picking between "content site" and "functional app."
 
 - **Live app:** [prompt-vcs-web.onrender.com](https://prompt-vcs-web.onrender.com)
-- **MCP server:** [prompt-vcs.onrender.com](https://prompt-vcs.onrender.com)
 
 ## What it does
 
@@ -22,9 +21,6 @@ manual QA gate, no mode-picking between "content site" and "functional app."
      diff-aware-updates) a complete, self-contained HTML/CSS/JS artifact.
 3. You get a working link to the generated site/app, plus full QA and build
    history, and can diff any two prompt versions against each other.
-
-Editing a prompt re-runs the whole pipeline from a new version — there's no
-separate "publish" action.
 
 ## Architecture
 
