@@ -10,5 +10,13 @@ namespace PromptVcs.Core;
 /// </summary>
 public interface IClaudeCodeInvoker
 {
-    Task<ClaudeCodeResult> InvokeAsync(string prompt, IReadOnlyList<Attachment>? attachments = null, CancellationToken ct = default);
+    /// <param name="model">
+    /// Optional Claude Code model alias ("haiku", "sonnet", "opus", ...).
+    /// Null uses Claude Code's own default. Measured: haiku is NOT faster
+    /// for a large single-shot full-page generation (it tends to produce
+    /// more, not less, output for that shape of task) but is roughly 2x
+    /// faster for a small, tightly-scoped task like a planning call or one
+    /// section of a page — callers should pick per call-shape, not globally.
+    /// </param>
+    Task<ClaudeCodeResult> InvokeAsync(string prompt, IReadOnlyList<Attachment>? attachments = null, string? model = null, CancellationToken ct = default);
 }

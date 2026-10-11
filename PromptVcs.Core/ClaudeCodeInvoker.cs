@@ -20,7 +20,7 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
 {
     private static readonly string[] UsageLimitMarkers = { "usage limit", "rate limit", "quota", "exceeded your" };
 
-    public async Task<ClaudeCodeResult> InvokeAsync(string prompt, IReadOnlyList<Attachment>? attachments = null, CancellationToken ct = default)
+    public async Task<ClaudeCodeResult> InvokeAsync(string prompt, IReadOnlyList<Attachment>? attachments = null, string? model = null, CancellationToken ct = default)
     {
         if (Environment.GetEnvironmentVariable("PROMPTVCS_MOCK_CLAUDE") == "1")
         {
@@ -28,6 +28,7 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
         }
 
         string? attachmentDir = null;
+        var placeholders = new Dictionary<string, string>();
         if (attachments is { Count: > 0 })
         {
             // Claude Code's headless mode has no way to receive inline image
@@ -38,20 +39,22 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
             // what the image looks like.
             //
             // Embedding the image in the actual HTML output is a separate
-            // problem: Claude cannot reliably reproduce the exact original
-            // bytes just by viewing an image (Read gives it rendered pixels
-            // for vision, not the underlying base64 text), and the
-            // generation prompts elsewhere explicitly forbid "external
-            // images" as part of keeping the artifact self-contained — a
-            // rule Claude has no reason to realize doesn't apply to a data:
-            // URI. Both problems are solved by handing Claude the exact,
-            // ready-made data: URI string for each attachment and telling it
-            // explicitly that this is the one correct way to embed it.
+            // problem, and handing Claude the raw base64 to retype verbatim
+            // (an earlier version of this code did) turned out to be a real
+            // bug in practice: for anything but a tiny test image, that's
+            // tens of thousands of output characters Claude has to transcribe
+            // exactly, which is slow (risked the Runner's 5-minute job
+            // timeout on a real ~36KB logo) and error-prone (one mistyped
+            // character silently breaks the image). Instead, Claude is told
+            // to use a short unique placeholder token as the <img src>, and
+            // this code swaps each placeholder for the real data: URI after
+            // generation — Claude never has to see or reproduce the bytes,
+            // and the substitution is always byte-exact by construction.
             attachmentDir = Path.Combine(Path.GetTempPath(), "promptvcs-attachments", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(attachmentDir);
             var lines = new List<string>
             {
-                $"You have been given {attachments.Count} reference image attachment(s). For each one below: a local file path (view it with your Read tool to understand what it looks like, e.g. its colors/shape/style) and the exact data: URI you MUST use if the prompt implies this image should actually appear in the generated page (e.g. a logo) — use that exact string verbatim as an <img src=\"...\"> value. This is a deliberate exception to any \"no external images\" rule elsewhere in this prompt: a data: URI is embedded inline, not an external resource, so it's always allowed. Never try to re-create, re-encode, or guess the image's bytes yourself — only the exact provided string is correct.",
+                $"You have been given {attachments.Count} reference image attachment(s). For each one below: a local file path (view it with your Read tool to understand what it looks like, e.g. its colors/shape/style) and a placeholder token. If the prompt implies this image should actually appear in the generated page (e.g. a logo), use its placeholder token verbatim, unmodified, as the entire <img src=\"...\"> value — e.g. <img src=\"PLACEHOLDER_TOKEN_HERE\" alt=\"...\">. This is a deliberate exception to any \"no external images\" rule elsewhere in this prompt. Do NOT write out any base64 or data: URI yourself — the real image will be substituted in for the placeholder automatically afterward, so writing the actual bytes yourself would be both wasted effort and wrong if even one character differs from the original.",
             };
             for (var i = 0; i < attachments.Count; i++)
             {
@@ -59,8 +62,9 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
                 var safeName = string.Join("_", attachment.FileName.Split(Path.GetInvalidFileNameChars()));
                 var path = Path.Combine(attachmentDir, $"{i}_{safeName}");
                 await File.WriteAllBytesAsync(path, Convert.FromBase64String(attachment.Base64Data), ct);
-                lines.Add($"{i + 1}. \"{attachment.FileName}\" — file path: {path}");
-                lines.Add($"   data URI: data:{attachment.ContentType};base64,{attachment.Base64Data}");
+                var placeholder = $"PROMPTVCS_ATTACHMENT_{Guid.NewGuid():N}";
+                placeholders[placeholder] = $"data:{attachment.ContentType};base64,{attachment.Base64Data}";
+                lines.Add($"{i + 1}. \"{attachment.FileName}\" — file path: {path}, placeholder token: {placeholder}");
             }
             lines.Add("");
             lines.Add(prompt);
@@ -69,7 +73,17 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
 
         try
         {
-            return await InvokeProcessAsync(prompt, attachmentDir, ct);
+            var result = await InvokeProcessAsync(prompt, attachmentDir, model, ct);
+            if (result.Ok && placeholders.Count > 0)
+            {
+                var text = result.Text;
+                foreach (var (placeholder, dataUri) in placeholders)
+                {
+                    text = text.Replace(placeholder, dataUri, StringComparison.Ordinal);
+                }
+                result = result with { Text = text };
+            }
+            return result;
         }
         finally
         {
@@ -80,7 +94,7 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
         }
     }
 
-    private async Task<ClaudeCodeResult> InvokeProcessAsync(string prompt, string? attachmentDir, CancellationToken ct)
+    private async Task<ClaudeCodeResult> InvokeProcessAsync(string prompt, string? attachmentDir, string? model, CancellationToken ct)
     {
         var utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         var psi = new ProcessStartInfo
@@ -106,6 +120,11 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
         psi.ArgumentList.Add("-p");
         psi.ArgumentList.Add("--output-format");
         psi.ArgumentList.Add("json");
+        if (model != null)
+        {
+            psi.ArgumentList.Add("--model");
+            psi.ArgumentList.Add(model);
+        }
         if (attachmentDir != null)
         {
             // Without this, Claude Code's own permission system denies
@@ -176,12 +195,18 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
     {
         var html = "<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Mock Artifact</title></head>\n<body><h1>Mock generated artifact</h1><p>Generated from a " + prompt.Length + "-character prompt.</p></body>\n</html>";
 
-        // PublishRules' combined first-run screen+generate prompt: JSON line, then a
-        // literal "===HTML===" marker, then raw (non-JSON-escaped) HTML.
-        if (prompt.Contains("===HTML===", StringComparison.Ordinal))
+        // PublishRules.BuildFirstRunScreenPrompt: screening only, JSON, no HTML.
+        if (prompt.Contains("Just the screening judgment", StringComparison.Ordinal))
         {
-            var combined = "{\"safe\": true, \"safetyReason\": \"No concerning content detected.\", \"feasible\": true, \"feasibilitySummary\": \"Mock feasibility check looks buildable.\"}\n===HTML===\n" + html;
-            return new ClaudeCodeResult(true, combined, false, null);
+            var screen = "{\"safe\": true, \"safetyReason\": \"No concerning content detected.\", \"feasible\": true, " +
+                "\"feasibilitySummary\": \"Mock feasibility check looks buildable.\", \"type\": \"content\", \"name\": \"Mock Site\"}";
+            return new ClaudeCodeResult(true, screen, false, null);
+        }
+        // PublishRules.BuildSectionPrompt: one parallel section of a plan-based
+        // first-run page — a fragment, not a full document.
+        if (prompt.Contains("ONE section of a larger self-contained HTML page", StringComparison.Ordinal))
+        {
+            return new ClaudeCodeResult(true, $"<section class=\"mock-{Guid.NewGuid():N}\"><p>Mock section, generated from a {prompt.Length}-character prompt.</p></section>", false, null);
         }
         // Qa's own combined safety+feasibility-only prompt (no HTML expected).
         if (prompt.Contains("respond with JSON", StringComparison.OrdinalIgnoreCase) && prompt.Contains("\"safe\"", StringComparison.OrdinalIgnoreCase))

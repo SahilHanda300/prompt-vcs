@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace PromptVcs.Core;
@@ -21,6 +22,25 @@ public static class ArtifactSanitizer
     private static readonly Regex ViewportMeta = new(@"<meta[^>]*viewport", RegexOptions.IgnoreCase);
     private const int MinLength = 20;
 
+    // Every generation prompt tells the model "no external dependencies" in
+    // plain English — real measurement showed that's necessary but NOT
+    // sufficient: a parallel-section first-run build once slipped a Google
+    // Fonts @import into every section despite the instruction being present
+    // elsewhere in the same prompt (see CLAUDE.md's "parallel first-run
+    // generation" entry). Prompt wording is a request the model can get
+    // wrong; this is a deterministic, code-enforced backstop that can't.
+    // Each pattern targets an actual resource-LOADING construct — not a
+    // plain <a href="https://..."> content link, which is legitimate (e.g.
+    // a social media link) and not a self-containment violation at all.
+    private static readonly (string Label, Regex Pattern)[] ExternalResourcePatterns =
+    {
+        ("<link> to an external stylesheet/font", new Regex(@"<link\b[^>]*href\s*=\s*[""']https?://", RegexOptions.IgnoreCase)),
+        ("<script> with an external src", new Regex(@"<script\b[^>]*\bsrc\s*=\s*[""']https?://", RegexOptions.IgnoreCase)),
+        ("<img>/<iframe> with an external src", new Regex(@"<(?:img|iframe)\b[^>]*\bsrc\s*=\s*[""']https?://", RegexOptions.IgnoreCase)),
+        ("CSS @import of an external URL", new Regex(@"@import\s+(?:url\()?[""']?https?://", RegexOptions.IgnoreCase)),
+        ("CSS url() referencing an external resource", new Regex(@"url\(\s*[""']?https?://", RegexOptions.IgnoreCase)),
+    };
+
     public static SanitizeResult Sanitize(string raw)
     {
         var text = raw.Trim();
@@ -34,6 +54,13 @@ public static class ArtifactSanitizer
         if (text.Length < MinLength)
         {
             return new SanitizeResult(false, "", $"Generated output too short ({text.Length} chars) to be a valid artifact.");
+        }
+
+        var externalRefs = ExternalResourcePatterns.Where(p => p.Pattern.IsMatch(text)).Select(p => p.Label).ToList();
+        if (externalRefs.Count > 0)
+        {
+            return new SanitizeResult(false, "",
+                $"Generated output references external resource(s), violating the self-contained-artifact rule: {string.Join("; ", externalRefs)}.");
         }
 
         if (!ViewportMeta.IsMatch(text))
