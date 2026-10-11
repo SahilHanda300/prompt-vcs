@@ -297,7 +297,7 @@ public class PublishRules
         .Concat(new[]
         {
             "",
-            "Requirements: a single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external fonts or image URLs/files) — a provided attachment's placeholder token is the one exception, since it's resolved to an embedded image, not an external resource. Include a viewport meta tag and a descriptive <title> tag.",
+            "Requirements: a single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external image URLs/files, no external scripts) — two exceptions: a known font provider (e.g. Google Fonts via <link>/@import) may be used for better typography, and a provided attachment's placeholder token is resolved to an embedded image, not an external resource. Include a viewport meta tag and a descriptive <title> tag.",
             "Respond with ONLY the HTML document — no explanation, no markdown code fences.",
             "",
             $"Prompt name: {promptName}",
@@ -359,7 +359,7 @@ public class PublishRules
             "- Make confident, specific creative decisions for everything else (copy, details, offerings) that fits the overall prompt and the shared name above. Never use placeholder text like 'Lorem ipsum', '[Your text here]', or similar.",
             "- Genuinely polished: readable typography, sensible spacing, fits the shared design brief exactly.",
             "- Fully responsive at phone width and up.",
-            "- No external dependencies: no CDN links, no external font imports (e.g. no @import/<link> to fonts.googleapis.com or similar), no external image URLs. Use system/web-safe font stacks only. A provided attachment's placeholder token (if any, and if this section is where it belongs — e.g. a logo in a header) is the one exception, since it's resolved to an embedded image, not an external resource.",
+            "- No external dependencies, with two exceptions: a known font provider (e.g. a Google Fonts <link>/@import) may be used for better typography than a system font stack alone, and a provided attachment's placeholder token (if any, and if this section is where it belongs — e.g. a logo in a header) is resolved to an embedded image, not an external resource. No other external CDN links, scripts, or image URLs.",
             "- Keep this one section lean and efficient — roughly 60-120 words of visible copy and compact, non-repetitive CSS (reuse one class per logical element, don't over-decorate with extra wrapper divs or redundant rules). This is ONE part of a multi-section page, not the whole page: being concise here is correct, not a quality compromise — the page's overall polish comes from several well-made concise sections together, not from any single section being exhaustive.",
             "",
             "Respond with ONLY a single HTML fragment for this section — a <header>, <section>, or <footer> element as appropriate (no <html>/<head>/<body>, no markdown code fences, no explanation). Any CSS this section needs goes in its own <style> block scoped under a unique class name for this section, so it can't collide with other sections' styles. Any JS this section needs (e.g. a mobile nav toggle) goes in its own <script> block, using only ids/classes scoped to this section. A provided attachment's placeholder token (if any, and if this section is where it belongs) is used verbatim as an <img src=\"...\">.",

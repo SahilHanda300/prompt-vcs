@@ -7,12 +7,35 @@ var invoker = new ClaudeCodeInvoker();
 
 var urlWithToken = string.IsNullOrEmpty(token) ? hubUrl : $"{hubUrl}?token={Uri.EscapeDataString(token)}";
 
+// ServerTimeout/KeepAliveInterval raised well past SignalR's own 30s
+// defaults, to match RunnerDispatchInvoker's 5-minute application-level job
+// timeout — a real generation call (especially opus, or anything with
+// attachments) can legitimately run longer than 30s, and the default
+// would have the transport itself drop the connection mid-job before our
+// own timeout ever gets a chance to. KeepAliveInterval stays well under
+// ServerTimeout, as SignalR requires.
 var connection = new HubConnectionBuilder()
     .WithUrl(urlWithToken)
     .WithAutomaticReconnect()
+    .WithServerTimeout(TimeSpan.FromMinutes(6))
+    .WithKeepAliveInterval(TimeSpan.FromSeconds(15))
     .Build();
 
-connection.On<string, string, List<Attachment>, string?>("RunJob", async (jobId, prompt, attachments, model) =>
+connection.On<string, string, List<Attachment>, string?>("RunJob", (jobId, prompt, attachments, model) =>
+{
+    // Fired off, not awaited, deliberately: SignalR's client-side message
+    // loop processes `.On` handlers inline, so awaiting a long Claude Code
+    // call directly here would block the connection from sending its own
+    // keep-alive pings for the whole duration — a real, measured cause of
+    // "Connection closed with an error" on real generation calls (first
+    // seen reliably once calls got slower after switching to opus). Firing
+    // the work to the background and returning immediately keeps the
+    // connection's own loop free regardless of how long the job takes.
+    _ = RunJobAsync(jobId, prompt, attachments, model);
+    return Task.CompletedTask;
+});
+
+async Task RunJobAsync(string jobId, string prompt, List<Attachment> attachments, string? model)
 {
     WriteLine($"Running job {jobId}{(attachments.Count > 0 ? $" ({attachments.Count} attachment(s))" : "")}{(model != null ? $" [model={model}]" : "")}...", ConsoleColor.Cyan);
     var result = await invoker.InvokeAsync(prompt, attachments, model);
@@ -25,7 +48,7 @@ connection.On<string, string, List<Attachment>, string?>("RunJob", async (jobId,
     {
         WriteLine($"Failed to report result for job {jobId}: {ex.Message}", ConsoleColor.Red);
     }
-});
+}
 
 connection.Reconnecting += _ =>
 {

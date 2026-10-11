@@ -17,7 +17,20 @@ var builder = WebApplication.CreateBuilder(args);
 // container) couldn't reach the app at all if it bound to localhost.
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-builder.Services.AddSignalR();
+// ClientTimeoutInterval/KeepAliveInterval raised past SignalR's 30s
+// defaults to match the Runner's own HubConnectionBuilder settings and
+// RunnerDispatchInvoker's 5-minute application-level job timeout — both
+// sides of a SignalR connection enforce their own timeout independently,
+// so raising only the client's would still leave the server free to drop
+// the connection first. See PromptVcs.Runner/Program.cs for the matching
+// client-side config and why this was needed (a long opus/attachment
+// generation call was reliably triggering "Connection closed with an
+// error" once calls started regularly running past ~30s).
+builder.Services.AddSignalR(options =>
+{
+    options.ClientTimeoutInterval = TimeSpan.FromMinutes(6);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+});
 
 builder.Services.AddSingleton<MongoDatabaseProvider>();
 builder.Services.AddSingleton<ServerStore>();
