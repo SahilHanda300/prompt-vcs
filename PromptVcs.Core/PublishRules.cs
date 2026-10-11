@@ -166,7 +166,7 @@ public class PublishRules
         .Concat(new[]
         {
             "",
-            "Requirements: a single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external fonts or images), include a viewport meta tag and a descriptive <title> tag.",
+            "Requirements: a single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external fonts or image URLs/files) — a provided attachment's data: URI is the one exception, since it's embedded inline, not an external resource. Include a viewport meta tag and a descriptive <title> tag.",
             "Respond with ONLY the HTML document — no explanation, no markdown code fences.",
             "",
             $"Prompt name: {promptName}",
@@ -193,7 +193,7 @@ public class PublishRules
         .Concat(QualityBarLines())
         .Concat(new[]
         {
-            "- A single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external fonts or images), a viewport meta tag, and a descriptive <title> tag.",
+            "- A single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external fonts or image URLs/files) — a provided attachment's data: URI is the one exception, since it's embedded inline, not an external resource. A viewport meta tag and a descriptive <title> tag.",
             "",
             "Respond in EXACTLY this format and nothing else:",
             "Line 1: a single-line JSON object {\"safe\": boolean, \"safetyReason\": string, \"feasible\": boolean, \"feasibilitySummary\": string}",
@@ -228,6 +228,7 @@ public class PublishRules
             "The prompt that generated it has changed. Below is a line diff of the prompt change (+ added, - removed) and the existing artifact.",
             "Apply a targeted update reflecting the diff — do not regenerate from scratch unless the diff requires it.",
             "Keep (or improve) the same quality bar as the original: no placeholder-looking text, a polished cohesive design, and real working functionality for anything interactive — never let an update make the result feel sparser or less finished than before.",
+            "If the diff references an attached image (e.g. a logo) and you were given its data: URI above, actually add an <img> using that exact data: URI in the appropriate place — don't just mention it in passing.",
             "Respond with ONLY the complete updated HTML document — no explanation, no markdown code fences.",
             "",
             $"Prompt name: {promptName}",

@@ -31,26 +31,40 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
         if (attachments is { Count: > 0 })
         {
             // Claude Code's headless mode has no way to receive inline image
-            // bytes on stdin — it reads images the same way it reads any
-            // other file, via a local path its Read tool can open. The
-            // Runner is the only component with a real filesystem under
-            // Claude Code, so attachments are decoded to a scratch temp
-            // directory here and the prompt is told where to find them.
+            // bytes on stdin for vision input — it has to be a local file its
+            // Read tool can open. The Runner is the only component with a
+            // real filesystem under Claude Code, so attachments are decoded
+            // to a scratch temp directory here, purely so Claude can *see*
+            // what the image looks like.
+            //
+            // Embedding the image in the actual HTML output is a separate
+            // problem: Claude cannot reliably reproduce the exact original
+            // bytes just by viewing an image (Read gives it rendered pixels
+            // for vision, not the underlying base64 text), and the
+            // generation prompts elsewhere explicitly forbid "external
+            // images" as part of keeping the artifact self-contained — a
+            // rule Claude has no reason to realize doesn't apply to a data:
+            // URI. Both problems are solved by handing Claude the exact,
+            // ready-made data: URI string for each attachment and telling it
+            // explicitly that this is the one correct way to embed it.
             attachmentDir = Path.Combine(Path.GetTempPath(), "promptvcs-attachments", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(attachmentDir);
-            var paths = new List<string>();
-            foreach (var attachment in attachments)
+            var lines = new List<string>
             {
+                $"You have been given {attachments.Count} reference image attachment(s). For each one below: a local file path (view it with your Read tool to understand what it looks like, e.g. its colors/shape/style) and the exact data: URI you MUST use if the prompt implies this image should actually appear in the generated page (e.g. a logo) — use that exact string verbatim as an <img src=\"...\"> value. This is a deliberate exception to any \"no external images\" rule elsewhere in this prompt: a data: URI is embedded inline, not an external resource, so it's always allowed. Never try to re-create, re-encode, or guess the image's bytes yourself — only the exact provided string is correct.",
+            };
+            for (var i = 0; i < attachments.Count; i++)
+            {
+                var attachment = attachments[i];
                 var safeName = string.Join("_", attachment.FileName.Split(Path.GetInvalidFileNameChars()));
-                var path = Path.Combine(attachmentDir, $"{paths.Count}_{safeName}");
+                var path = Path.Combine(attachmentDir, $"{i}_{safeName}");
                 await File.WriteAllBytesAsync(path, Convert.FromBase64String(attachment.Base64Data), ct);
-                paths.Add(path);
+                lines.Add($"{i + 1}. \"{attachment.FileName}\" — file path: {path}");
+                lines.Add($"   data URI: data:{attachment.ContentType};base64,{attachment.Base64Data}");
             }
-            prompt = string.Join("\n",
-                $"You have been given {paths.Count} reference image attachment(s) at the following local file path(s). Use your Read tool to view each one before you begin, and incorporate it as the prompt implies (e.g. use an attached logo or reference image in the generated design):",
-                string.Join("\n", paths.Select(p => $"- {p}")),
-                "",
-                prompt);
+            lines.Add("");
+            lines.Add(prompt);
+            prompt = string.Join("\n", lines);
         }
 
         try
