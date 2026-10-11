@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
@@ -197,7 +198,7 @@ public class PublishRules
             $"<title>{System.Net.WebUtility.HtmlEncode(screen.Name!)}</title>",
             "</head>",
             "<body>",
-            string.Join("\n", sectionResults.Select(r => r.Text.Trim())),
+            string.Join("\n", sectionResults.Select((r, i) => EnsureSectionId(r.Text, ContentSectionTemplate[i].Id))),
             "</body>",
             "</html>");
 
@@ -236,6 +237,28 @@ public class PublishRules
         new("details", "Supporting detail — the subject's story, background, social proof, or testimonials, whichever fits best.", "dark"),
         new("footer", "A footer with contact info, hours, or location as relevant, and a final call-to-action.", "light"),
     };
+
+    /// Forces the given section's root element to carry `id="{id}"`,
+    /// overwriting any id the model used instead — guarantees the fixed
+    /// anchor targets (#hero/#highlights/#details/#footer) a section's CTA
+    /// is told it may link to actually exist on the assembled page,
+    /// regardless of whether the model remembered to add one itself.
+    /// `ArtifactSanitizer`'s broken-internal-link check is the backstop for
+    /// anything this can't fix (e.g. a section linking to a 5th, invented
+    /// anchor id despite being told not to).
+    private static string EnsureSectionId(string sectionHtml, string id)
+    {
+        var trimmed = sectionHtml.Trim();
+        var tagMatch = Regex.Match(trimmed, @"^<(header|section|footer|div)\b[^>]*>", RegexOptions.IgnoreCase);
+        if (!tagMatch.Success) return trimmed;
+
+        var openTag = tagMatch.Value;
+        var newOpenTag = Regex.IsMatch(openTag, @"\bid\s*=\s*[""'][^""']*[""']", RegexOptions.IgnoreCase)
+            ? Regex.Replace(openTag, @"\bid\s*=\s*[""'][^""']*[""']", $"id=\"{id}\"", RegexOptions.IgnoreCase)
+            : Regex.Replace(openTag, @"^<(\w+)", $"<$1 id=\"{id}\"", RegexOptions.IgnoreCase);
+
+        return newOpenTag + trimmed[openTag.Length..];
+    }
 
     /// A small curated set of concrete, pre-written design briefs rather
     /// than asking Claude to invent one — removes that decision (and its
@@ -297,7 +320,7 @@ public class PublishRules
         .Concat(new[]
         {
             "",
-            "Requirements: a single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external image URLs/files, no external scripts) — two exceptions: a known font provider (e.g. Google Fonts via <link>/@import) may be used for better typography, and a provided attachment's placeholder token is resolved to an embedded image, not an external resource. Include a viewport meta tag and a descriptive <title> tag.",
+            "Requirements: a single HTML file with any needed CSS/JS inlined, no external dependencies (no CDNs, no external scripts) — three exceptions: a known font provider (e.g. Google Fonts via <link>/@import) may be used for better typography; real photos may be used via https://picsum.photos/seed/<descriptive-seed>/<width>/<height> (always returns a real photo — never guess a URL from any other image host or a specific photo id, since that's almost certainly a broken link); and a provided attachment's placeholder token is resolved to an embedded image, not an external resource. If any navigation link points elsewhere on the same page (e.g. a \"See Menu\" link), make sure a matching id actually exists on the page — a link to a section that doesn't exist is a broken page. Include a viewport meta tag and a descriptive <title> tag.",
             "Respond with ONLY the HTML document — no explanation, no markdown code fences.",
             "",
             $"Prompt name: {promptName}",
@@ -359,8 +382,9 @@ public class PublishRules
             "- Make confident, specific creative decisions for everything else (copy, details, offerings) that fits the overall prompt and the shared name above. Never use placeholder text like 'Lorem ipsum', '[Your text here]', or similar.",
             "- Genuinely polished: readable typography, sensible spacing, fits the shared design brief exactly.",
             "- Fully responsive at phone width and up.",
-            "- No external dependencies, with two exceptions: a known font provider (e.g. a Google Fonts <link>/@import) may be used for better typography than a system font stack alone, and a provided attachment's placeholder token (if any, and if this section is where it belongs — e.g. a logo in a header) is resolved to an embedded image, not an external resource. No other external CDN links, scripts, or image URLs.",
+            "- No external dependencies, with three exceptions: a known font provider (e.g. a Google Fonts <link>/@import) may be used for better typography than a system font stack alone; real photos may be used via https://picsum.photos/seed/<descriptive-seed>/<width>/<height> (e.g. https://picsum.photos/seed/coffee-shop-hero/1200/600) — pick a descriptive seed text, this always returns a real photo, never guess a URL from any other image host or a specific photo id, since that would almost certainly be a broken link; and a provided attachment's placeholder token (if any, and if this section is where it belongs — e.g. a logo in a header) is resolved to an embedded image, not an external resource. No other external CDN links, scripts, or image URLs.",
             "- Keep this one section lean and efficient — roughly 60-120 words of visible copy and compact, non-repetitive CSS (reuse one class per logical element, don't over-decorate with extra wrapper divs or redundant rules). This is ONE part of a multi-section page, not the whole page: being concise here is correct, not a quality compromise — the page's overall polish comes from several well-made concise sections together, not from any single section being exhaustive.",
+            "- If this section includes a call-to-action that should link elsewhere ON THIS PAGE (e.g. \"See Laptops\", \"View Menu\", \"Contact us\"), it may ONLY use one of these exact anchor targets, whichever content it's pointing at — these are guaranteed to exist, nothing else will: #hero, #highlights, #details, #footer. Never invent any other anchor id (e.g. #laptops, #pricing) — nothing else on the page is guaranteed to have that id, and a link to a non-existent section is a broken page, not a working one.",
             "",
             "Respond with ONLY a single HTML fragment for this section — a <header>, <section>, or <footer> element as appropriate (no <html>/<head>/<body>, no markdown code fences, no explanation). Any CSS this section needs goes in its own <style> block scoped under a unique class name for this section, so it can't collide with other sections' styles. Any JS this section needs (e.g. a mobile nav toggle) goes in its own <script> block, using only ids/classes scoped to this section. A provided attachment's placeholder token (if any, and if this section is where it belongs) is used verbatim as an <img src=\"...\">.",
             "",
