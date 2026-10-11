@@ -29,7 +29,7 @@ public class RunnerDispatchInvoker : IClaudeCodeInvoker
         _registry = registry;
     }
 
-    public async Task<ClaudeCodeResult> InvokeAsync(string prompt, CancellationToken ct = default)
+    public async Task<ClaudeCodeResult> InvokeAsync(string prompt, IReadOnlyList<Attachment>? attachments = null, CancellationToken ct = default)
     {
         var connectionId = _registry.CurrentConnectionId;
         if (connectionId == null)
@@ -48,7 +48,7 @@ public class RunnerDispatchInvoker : IClaudeCodeInvoker
 
         try
         {
-            await _hubContext.Clients.Client(connectionId).SendAsync("RunJob", jobId, prompt, ct);
+            await _hubContext.Clients.Client(connectionId).SendAsync("RunJob", jobId, prompt, attachments ?? new List<Attachment>(), ct);
             return await tcs.Task;
         }
         finally

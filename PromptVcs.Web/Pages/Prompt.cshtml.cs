@@ -24,6 +24,9 @@ public class PromptModel : PageModel
     [BindProperty]
     public string EditContent { get; set; } = "";
 
+    [BindProperty]
+    public List<IFormFile>? Attachments { get; set; }
+
     public PromptRecordDto? Record { get; set; }
     public int Version { get; set; }
     public List<DiffLineDto>? DiffLines { get; set; }
@@ -64,9 +67,17 @@ public class PromptModel : PageModel
             return Page();
         }
 
+        var (attachments, attachmentError) = await AttachmentHelper.ToAttachmentDtosAsync(Attachments);
+        if (attachmentError != null)
+        {
+            ErrorMessage = attachmentError;
+            await LoadAsync(token);
+            return Page();
+        }
+
         try
         {
-            await _client.EditAsync(Name, EditContent, token);
+            await _client.EditAsync(Name, EditContent, attachments, token);
             return RedirectToPage("/Prompt", new { name = Name });
         }
         catch (InvalidOperationException ex)

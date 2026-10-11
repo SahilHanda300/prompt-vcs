@@ -33,7 +33,7 @@ public class PublishRules
 
     /// Update path only (Pipeline calls this when a prior successful build
     /// exists) — one Claude Code call, diff-aware.
-    public async Task<PublishOutcome> PublishAsync(PromptRecord record, int promptVersion, string content)
+    public async Task<PublishOutcome> PublishAsync(PromptRecord record, int promptVersion, string content, IReadOnlyList<Attachment>? attachments = null)
     {
         var buildVersion = record.Builds.Count + 1;
         var previousBuild = record.Builds.LastOrDefault(b => b.Status == BuildStatus.Success);
@@ -50,7 +50,7 @@ public class PublishRules
             ? BuildFirstRunPrompt(record.Name, content)
             : BuildUpdatePrompt(record.Name, previousContent, content, previousArtifact);
 
-        var claudeResult = await _invoker.InvokeAsync(generationPrompt);
+        var claudeResult = await _invoker.InvokeAsync(generationPrompt, attachments);
         if (!claudeResult.Ok)
         {
             return new PublishOutcome(false, buildVersion, null, claudeResult.Detail);
@@ -74,12 +74,12 @@ public class PublishRules
     /// backslashes, newlines all need perfect escaping); a marker needs no
     /// escaping at all and only costs one string search.
     public async Task<(QaCheckResult Safety, QaCheckResult Feasibility, PublishOutcome Outcome)> ScreenAndPublishFirstRunAsync(
-        PromptRecord record, int promptVersion, string content)
+        PromptRecord record, int promptVersion, string content, IReadOnlyList<Attachment>? attachments = null)
     {
         var buildVersion = record.Builds.Count + 1;
         var prompt = BuildFirstRunScreenAndGeneratePrompt(record.Name, content);
 
-        var claudeResult = await _invoker.InvokeAsync(prompt);
+        var claudeResult = await _invoker.InvokeAsync(prompt, attachments);
         if (!claudeResult.Ok)
         {
             var failure = new QaCheckResult(false, claudeResult.Detail ?? "Screening call failed to run.");

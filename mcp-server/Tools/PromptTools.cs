@@ -56,28 +56,70 @@ public class PromptTools
         return Ok(new { reset = true });
     }
 
+    private const int MaxAttachments = 4;
+    private const int MaxAttachmentBytes = 2 * 1024 * 1024;
+
     [McpServerTool(Name = "create"), Description(
         "Creates a new prompt and runs it through the automatic dev->qa->prod pipeline: " +
         "validation, content safety, trial generation, then publish if all pass.")]
     public async Task<string> Create(
         [Description("Name for the new prompt")] string name,
         [Description("Prompt content")] string content,
-        [Description("Session token")] string? sessionToken)
+        [Description("Reference image attachments (max 4, 2MB each) passed to Claude Code as generation context")] List<Attachment>? attachments = null,
+        [Description("Session token")] string? sessionToken = null)
     {
         var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
         if (authError != null) return authError;
-        return await RunPipelineAsync(store => _promptService.CreateAsync(store, name, content));
+        var attachmentError = ValidateAttachments(attachments);
+        if (attachmentError != null) return attachmentError;
+        return await RunPipelineAsync(store => _promptService.CreateAsync(store, name, content, attachments));
     }
 
     [McpServerTool(Name = "edit"), Description("Adds a new version to an existing prompt and runs it through the pipeline again.")]
     public async Task<string> Edit(
         [Description("Name of the existing prompt")] string name,
         [Description("New prompt content")] string content,
-        [Description("Session token")] string? sessionToken)
+        [Description("Reference image attachments (max 4, 2MB each) passed to Claude Code as generation context")] List<Attachment>? attachments = null,
+        [Description("Session token")] string? sessionToken = null)
     {
         var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
         if (authError != null) return authError;
-        return await RunPipelineAsync(store => _promptService.EditAsync(store, name, content));
+        var attachmentError = ValidateAttachments(attachments);
+        if (attachmentError != null) return attachmentError;
+        return await RunPipelineAsync(store => _promptService.EditAsync(store, name, content, attachments));
+    }
+
+    /// Returns an error envelope if any attachment is oversized, not an
+    /// image, or there are too many; null when the caller may proceed.
+    /// Images only, and base64-in-Mongo with a tight per-file cap, per the
+    /// same reasoning the rest of this project's store already follows: no
+    /// new storage system, just a size limit so the store document doesn't
+    /// bloat.
+    private static string? ValidateAttachments(List<Attachment>? attachments)
+    {
+        if (attachments == null || attachments.Count == 0) return null;
+        if (attachments.Count > MaxAttachments) return Error($"Too many attachments (max {MaxAttachments}).");
+        foreach (var attachment in attachments)
+        {
+            if (!attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return Error($"Attachment \"{attachment.FileName}\" is not an image ({attachment.ContentType}). Only image attachments are supported.");
+            }
+            byte[] bytes;
+            try
+            {
+                bytes = Convert.FromBase64String(attachment.Base64Data);
+            }
+            catch (FormatException)
+            {
+                return Error($"Attachment \"{attachment.FileName}\" has invalid base64 data.");
+            }
+            if (bytes.Length > MaxAttachmentBytes)
+            {
+                return Error($"Attachment \"{attachment.FileName}\" exceeds the {MaxAttachmentBytes / (1024 * 1024)}MB limit.");
+            }
+        }
+        return null;
     }
 
     [McpServerTool(Name = "list"), Description("Lists all prompts and their environment/build status.")]

@@ -1,6 +1,23 @@
+using System.Text.Json.Serialization;
+
 namespace PromptVcs.Core;
 
-public record PromptVersion(int Version, string Content, DateTimeOffset CreatedAt);
+/// Images attached to a prompt submission, sent to Claude Code as reference
+/// context for generation (e.g. a logo to incorporate) — stored as base64
+/// alongside the rest of the store, same as everything else in this project.
+/// JsonPropertyName is explicit here (rather than relying on a serializer's
+/// naming policy) since this type crosses two independent JSON boundaries
+/// with different default conventions: the MCP tool argument that creates
+/// it, and the SignalR hub call that forwards it to the Runner.
+public record Attachment(
+    [property: JsonPropertyName("fileName")] string FileName,
+    [property: JsonPropertyName("contentType")] string ContentType,
+    [property: JsonPropertyName("base64Data")] string Base64Data);
+
+public record PromptVersion(int Version, string Content, DateTimeOffset CreatedAt)
+{
+    public List<Attachment> Attachments { get; init; } = new();
+}
 
 public record QaCheckResult(bool Passed, string? Detail = null, long? DurationMs = null);
 

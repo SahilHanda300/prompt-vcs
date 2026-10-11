@@ -84,6 +84,11 @@ Every generated artifact is a single self-contained page — plain markup for
 a content site, or real working JS state/interactivity for a functional
 app — inferred by the model per-request, with no mode picked by the user.
 
+You can also attach up to 4 reference images (2MB each) to a submission —
+e.g. a logo — and Claude Code is asked to incorporate them into the
+generated result. Attachments apply only to the submission they're added
+to; re-attach on a later edit if you want them used again.
+
 ## Running locally
 
 ### Prerequisites

@@ -40,11 +40,35 @@ public class ServerClient
     public Task<LogoutResultDto> LogoutAsync(string sessionToken) =>
         CallAsync<LogoutResultDto>("logout", new Dictionary<string, object?> { ["sessionToken"] = sessionToken });
 
-    public Task<PipelineResultDto> CreateAsync(string name, string content, string sessionToken) =>
-        CallAsync<PipelineResultDto>("create", new Dictionary<string, object?> { ["name"] = name, ["content"] = content, ["sessionToken"] = sessionToken });
+    public Task<PipelineResultDto> CreateAsync(string name, string content, List<AttachmentDto>? attachments, string sessionToken) =>
+        CallAsync<PipelineResultDto>("create", new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["content"] = content,
+            ["attachments"] = ToArgs(attachments),
+            ["sessionToken"] = sessionToken,
+        });
 
-    public Task<PipelineResultDto> EditAsync(string name, string content, string sessionToken) =>
-        CallAsync<PipelineResultDto>("edit", new Dictionary<string, object?> { ["name"] = name, ["content"] = content, ["sessionToken"] = sessionToken });
+    public Task<PipelineResultDto> EditAsync(string name, string content, List<AttachmentDto>? attachments, string sessionToken) =>
+        CallAsync<PipelineResultDto>("edit", new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["content"] = content,
+            ["attachments"] = ToArgs(attachments),
+            ["sessionToken"] = sessionToken,
+        });
+
+    // Nested plain dictionaries, not typed DTOs — guarantees the exact
+    // "fileName"/"contentType"/"base64Data" keys the server's tool
+    // expects regardless of whatever JSON naming policy the MCP client
+    // library applies to the outer argument dictionary's values.
+    private static List<Dictionary<string, object?>>? ToArgs(List<AttachmentDto>? attachments) =>
+        attachments?.Select(a => new Dictionary<string, object?>
+        {
+            ["fileName"] = a.FileName,
+            ["contentType"] = a.ContentType,
+            ["base64Data"] = a.Base64Data,
+        }).ToList();
 
     public Task<List<PromptListItemDto>> ListAsync(string sessionToken) =>
         CallAsync<List<PromptListItemDto>>("list", new Dictionary<string, object?> { ["sessionToken"] = sessionToken });

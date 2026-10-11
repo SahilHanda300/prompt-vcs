@@ -12,10 +12,10 @@ var connection = new HubConnectionBuilder()
     .WithAutomaticReconnect()
     .Build();
 
-connection.On<string, string>("RunJob", async (jobId, prompt) =>
+connection.On<string, string, List<Attachment>>("RunJob", async (jobId, prompt, attachments) =>
 {
-    WriteLine($"Running job {jobId}...", ConsoleColor.Cyan);
-    var result = await invoker.InvokeAsync(prompt);
+    WriteLine($"Running job {jobId}{(attachments.Count > 0 ? $" ({attachments.Count} attachment(s))" : "")}...", ConsoleColor.Cyan);
+    var result = await invoker.InvokeAsync(prompt, attachments);
     try
     {
         await connection.InvokeAsync("ReportResult", jobId, result.Ok, result.Text, result.UsageLimitHit, result.Detail);

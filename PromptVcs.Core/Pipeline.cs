@@ -31,10 +31,10 @@ public class Pipeline
         _publishRules = publishRules;
     }
 
-    public async Task<PipelineResult> SubmitAsync(PromptRecord record, string content)
+    public async Task<PipelineResult> SubmitAsync(PromptRecord record, string content, List<Attachment>? attachments = null)
     {
         var version = record.History.Count > 0 ? record.History[^1].Version + 1 : 1;
-        record.History.Add(new PromptVersion(version, content, DateTimeOffset.UtcNow));
+        record.History.Add(new PromptVersion(version, content, DateTimeOffset.UtcNow) { Attachments = attachments ?? new() });
         record.Environments.Dev = version;
 
         var isFirstRun = !record.Builds.Any(b => b.Status == BuildStatus.Success);
@@ -52,7 +52,7 @@ public class Pipeline
             }
             else
             {
-                var (safety, feasibility, publishOutcome) = await _publishRules.ScreenAndPublishFirstRunAsync(record, version, content);
+                var (safety, feasibility, publishOutcome) = await _publishRules.ScreenAndPublishFirstRunAsync(record, version, content, attachments);
                 var passed = safety.Passed && feasibility.Passed;
                 checkpoint = new QaCheckpoint(version, DateTimeOffset.UtcNow, passed, new QaChecks(validation, safety, feasibility));
                 if (passed)
@@ -81,7 +81,7 @@ public class Pipeline
         record.Environments.Qa = version;
         record.Environments.Prod = version;
 
-        outcome ??= await _publishRules.PublishAsync(record, version, content);
+        outcome ??= await _publishRules.PublishAsync(record, version, content, attachments);
 
         var build = new Build(
             outcome.BuildVersion,

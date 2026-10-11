@@ -10,5 +10,5 @@ namespace PromptVcs.Core;
 /// </summary>
 public interface IClaudeCodeInvoker
 {
-    Task<ClaudeCodeResult> InvokeAsync(string prompt, CancellationToken ct = default);
+    Task<ClaudeCodeResult> InvokeAsync(string prompt, IReadOnlyList<Attachment>? attachments = null, CancellationToken ct = default);
 }

@@ -14,7 +14,7 @@ public class PromptService
         _pipeline = pipeline;
     }
 
-    public Task<PipelineResult> CreateAsync(Store store, string name, string content)
+    public Task<PipelineResult> CreateAsync(Store store, string name, string content, List<Attachment>? attachments = null)
     {
         var id = Slugify(name);
         if (store.Prompts.ContainsKey(id))
@@ -23,13 +23,13 @@ public class PromptService
         }
         var record = new PromptRecord { Id = id, Name = name };
         store.Prompts[id] = record;
-        return _pipeline.SubmitAsync(record, content);
+        return _pipeline.SubmitAsync(record, content, attachments);
     }
 
-    public Task<PipelineResult> EditAsync(Store store, string name, string content)
+    public Task<PipelineResult> EditAsync(Store store, string name, string content, List<Attachment>? attachments = null)
     {
         var record = GetOrThrow(store, name);
-        return _pipeline.SubmitAsync(record, content);
+        return _pipeline.SubmitAsync(record, content, attachments);
     }
 
     public static List<PromptRecord> List(Store store) =>

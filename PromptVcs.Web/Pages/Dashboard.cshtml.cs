@@ -21,6 +21,9 @@ public class DashboardModel : PageModel
     [BindProperty]
     public string NewPromptContent { get; set; } = "";
 
+    [BindProperty]
+    public List<IFormFile>? Attachments { get; set; }
+
     public async Task<IActionResult> OnGetAsync()
     {
         await LoadPromptsAsync();
@@ -39,9 +42,17 @@ public class DashboardModel : PageModel
             return Page();
         }
 
+        var (attachments, attachmentError) = await AttachmentHelper.ToAttachmentDtosAsync(Attachments);
+        if (attachmentError != null)
+        {
+            ErrorMessage = attachmentError;
+            await LoadPromptsAsync();
+            return Page();
+        }
+
         try
         {
-            await _client.CreateAsync(NewPromptName.Trim(), NewPromptContent, token);
+            await _client.CreateAsync(NewPromptName.Trim(), NewPromptContent, attachments, token);
             return RedirectToPage("/Prompt", new { name = NewPromptName.Trim() });
         }
         catch (InvalidOperationException ex)

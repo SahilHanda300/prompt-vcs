@@ -20,13 +20,54 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
 {
     private static readonly string[] UsageLimitMarkers = { "usage limit", "rate limit", "quota", "exceeded your" };
 
-    public async Task<ClaudeCodeResult> InvokeAsync(string prompt, CancellationToken ct = default)
+    public async Task<ClaudeCodeResult> InvokeAsync(string prompt, IReadOnlyList<Attachment>? attachments = null, CancellationToken ct = default)
     {
         if (Environment.GetEnvironmentVariable("PROMPTVCS_MOCK_CLAUDE") == "1")
         {
             return MockInvoke(prompt);
         }
 
+        string? attachmentDir = null;
+        if (attachments is { Count: > 0 })
+        {
+            // Claude Code's headless mode has no way to receive inline image
+            // bytes on stdin — it reads images the same way it reads any
+            // other file, via a local path its Read tool can open. The
+            // Runner is the only component with a real filesystem under
+            // Claude Code, so attachments are decoded to a scratch temp
+            // directory here and the prompt is told where to find them.
+            attachmentDir = Path.Combine(Path.GetTempPath(), "promptvcs-attachments", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(attachmentDir);
+            var paths = new List<string>();
+            foreach (var attachment in attachments)
+            {
+                var safeName = string.Join("_", attachment.FileName.Split(Path.GetInvalidFileNameChars()));
+                var path = Path.Combine(attachmentDir, $"{paths.Count}_{safeName}");
+                await File.WriteAllBytesAsync(path, Convert.FromBase64String(attachment.Base64Data), ct);
+                paths.Add(path);
+            }
+            prompt = string.Join("\n",
+                $"You have been given {paths.Count} reference image attachment(s) at the following local file path(s). Use your Read tool to view each one before you begin, and incorporate it as the prompt implies (e.g. use an attached logo or reference image in the generated design):",
+                string.Join("\n", paths.Select(p => $"- {p}")),
+                "",
+                prompt);
+        }
+
+        try
+        {
+            return await InvokeProcessAsync(prompt, attachmentDir, ct);
+        }
+        finally
+        {
+            if (attachmentDir != null)
+            {
+                try { Directory.Delete(attachmentDir, recursive: true); } catch { /* best effort cleanup */ }
+            }
+        }
+    }
+
+    private async Task<ClaudeCodeResult> InvokeProcessAsync(string prompt, string? attachmentDir, CancellationToken ct)
+    {
         var utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         var psi = new ProcessStartInfo
         {
@@ -51,6 +92,16 @@ public class ClaudeCodeInvoker : IClaudeCodeInvoker
         psi.ArgumentList.Add("-p");
         psi.ArgumentList.Add("--output-format");
         psi.ArgumentList.Add("json");
+        if (attachmentDir != null)
+        {
+            // Without this, Claude Code's own permission system denies
+            // reading a file outside its working directory, even via a
+            // plain path reference in the prompt text — confirmed against
+            // a real (non-mock) call: the model replied "read permission
+            // was denied" for the attachment path without this flag.
+            psi.ArgumentList.Add("--add-dir");
+            psi.ArgumentList.Add(attachmentDir);
+        }
 
         using var process = new Process { StartInfo = psi };
 
