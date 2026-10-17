@@ -45,6 +45,12 @@ public class PromptRecord
 {
     public required string Id { get; set; }
     public required string Name { get; set; }
+    // Null for records created before prompt-ownership existed ("legacy"
+    // prompts) — treated as visible/editable by any authenticated user,
+    // same as the fully-open behavior this project had before. A new
+    // prompt always gets an Owner at creation time. Admins bypass
+    // ownership entirely regardless of this field — see PromptService.
+    public string? Owner { get; set; }
     public List<PromptVersion> History { get; set; } = new();
     public Environments Environments { get; set; } = new();
     public List<QaCheckpoint> QaCheckpoints { get; set; } = new();

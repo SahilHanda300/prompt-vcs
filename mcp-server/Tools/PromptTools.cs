@@ -42,7 +42,7 @@ public class PromptTools
         "sites. Cannot be undone. Admin only.")]
     public async Task<string> Reset([Description("Session token")] string? sessionToken)
     {
-        var authError = await RequireAuthAsync(sessionToken, requireAdmin: true);
+        var (authError, _, _) = await RequireAuthAsync(sessionToken, requireAdmin: true);
         if (authError != null) return authError;
 
         await _store.ResetAsync();
@@ -61,32 +61,72 @@ public class PromptTools
 
     [McpServerTool(Name = "create"), Description(
         "Creates a new prompt and runs it through the automatic dev->qa->prod pipeline: " +
-        "validation, content safety, trial generation, then publish if all pass.")]
+        "validation, content safety, trial generation, then publish if all pass. The caller " +
+        "becomes the prompt's owner.")]
     public async Task<string> Create(
         [Description("Name for the new prompt")] string name,
         [Description("Prompt content")] string content,
         [Description("Reference image attachments (max 4, 2MB each) passed to Claude Code as generation context")] List<Attachment>? attachments = null,
         [Description("Session token")] string? sessionToken = null)
     {
-        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        var (authError, username, _) = await RequireAuthAsync(sessionToken, requireAdmin: false);
         if (authError != null) return authError;
         var attachmentError = ValidateAttachments(attachments);
         if (attachmentError != null) return attachmentError;
-        return await RunPipelineAsync(store => _promptService.CreateAsync(store, name, content, attachments));
+        return await RunPipelineAsync(store => _promptService.CreateAsync(store, name, content, username!, attachments));
     }
 
-    [McpServerTool(Name = "edit"), Description("Adds a new version to an existing prompt and runs it through the pipeline again.")]
+    [McpServerTool(Name = "edit"), Description(
+        "Adds a new version to an existing prompt and runs it through the pipeline again. " +
+        "Only the prompt's owner or an admin may edit it.")]
     public async Task<string> Edit(
         [Description("Name of the existing prompt")] string name,
         [Description("New prompt content")] string content,
         [Description("Reference image attachments (max 4, 2MB each) passed to Claude Code as generation context")] List<Attachment>? attachments = null,
         [Description("Session token")] string? sessionToken = null)
     {
-        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        var (authError, username, isAdmin) = await RequireAuthAsync(sessionToken, requireAdmin: false);
         if (authError != null) return authError;
         var attachmentError = ValidateAttachments(attachments);
         if (attachmentError != null) return attachmentError;
-        return await RunPipelineAsync(store => _promptService.EditAsync(store, name, content, attachments));
+        return await RunPipelineAsync(store => _promptService.EditAsync(store, name, content, username!, isAdmin, attachments));
+    }
+
+    [McpServerTool(Name = "deletePrompt"), Description(
+        "Permanently deletes a prompt and its version/QA/build history. Only the prompt's " +
+        "owner or an admin may delete it. Does not delete the generated site files on disk.")]
+    public async Task<string> DeletePrompt(
+        [Description("Prompt name")] string name,
+        [Description("Session token")] string? sessionToken = null)
+    {
+        var (authError, username, isAdmin) = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        if (authError != null) return authError;
+
+        try
+        {
+            await _store.MutateAsync<object?>(store =>
+            {
+                PromptService.Delete(store, name, username!, isAdmin);
+                return Task.FromResult<object?>(null);
+            });
+            // Best-effort — a missing directory (e.g. never had a successful
+            // build, or Render's ephemeral disk already lost it) isn't an
+            // error worth failing the whole delete over.
+            var promptDir = Path.Combine(_siteDir, Slugify(name));
+            if (Directory.Exists(promptDir))
+            {
+                Directory.Delete(promptDir, recursive: true);
+            }
+            return Ok(new { deleted = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Error(ex.Message);
+        }
+        catch (PromptAccessDeniedException ex)
+        {
+            return Error(ex.Message);
+        }
     }
 
     /// Returns an error envelope if any attachment is oversized, not an
@@ -122,17 +162,20 @@ public class PromptTools
         return null;
     }
 
-    [McpServerTool(Name = "list"), Description("Lists all prompts and their environment/build status.")]
+    [McpServerTool(Name = "list"), Description(
+        "Lists prompts and their environment/build status. A non-admin sees only their own " +
+        "prompts (plus any pre-ownership legacy prompt); an admin sees every prompt, with its owner.")]
     public async Task<string> List([Description("Session token")] string? sessionToken)
     {
-        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        var (authError, username, isAdmin) = await RequireAuthAsync(sessionToken, requireAdmin: false);
         if (authError != null) return authError;
 
         return await _store.ReadAsync(store =>
         {
-            var items = PromptService.List(store).Select(r => new
+            var items = PromptService.List(store, username!, isAdmin).Select(r => new
             {
                 name = r.Name,
+                owner = r.Owner,
                 dev = r.Environments.Dev,
                 qa = r.Environments.Qa,
                 prod = r.Environments.Prod,
@@ -144,20 +187,22 @@ public class PromptTools
         });
     }
 
-    [McpServerTool(Name = "show"), Description("Shows a prompt's content, environments, QA history, and build history.")]
+    [McpServerTool(Name = "show"), Description(
+        "Shows a prompt's content, environments, QA history, and build history. Only the " +
+        "prompt's owner or an admin may view it.")]
     public async Task<string> Show(
         [Description("Prompt name")] string name,
         [Description("Specific version to show; defaults to the prod version, or latest")] int? version = null,
         [Description("Session token")] string? sessionToken = null)
     {
-        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        var (authError, username, isAdmin) = await RequireAuthAsync(sessionToken, requireAdmin: false);
         if (authError != null) return authError;
 
         try
         {
             return await _store.ReadAsync(store =>
             {
-                var (record, resolvedVersion, content) = PromptService.Show(store, name, version);
+                var (record, resolvedVersion, content) = PromptService.Show(store, name, username!, isAdmin, version);
                 return Ok(new { record, version = resolvedVersion, content });
             });
         }
@@ -165,28 +210,38 @@ public class PromptTools
         {
             return Error(ex.Message);
         }
+        catch (PromptAccessDeniedException ex)
+        {
+            return Error(ex.Message);
+        }
     }
 
-    [McpServerTool(Name = "diff"), Description("Line diff between two versions of a prompt's content.")]
+    [McpServerTool(Name = "diff"), Description(
+        "Line diff between two versions of a prompt's content. Only the prompt's owner or an " +
+        "admin may view it.")]
     public async Task<string> Diff(
         [Description("Prompt name")] string name,
         [Description("First version")] int v1,
         [Description("Second version")] int v2,
         [Description("Session token")] string? sessionToken = null)
     {
-        var authError = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        var (authError, username, isAdmin) = await RequireAuthAsync(sessionToken, requireAdmin: false);
         if (authError != null) return authError;
 
         try
         {
             return await _store.ReadAsync(store =>
             {
-                var diffModel = PromptService.Diff(store, name, v1, v2);
+                var diffModel = PromptService.Diff(store, name, v1, v2, username!, isAdmin);
                 var lines = diffModel.Lines.Select(l => new { type = l.Type.ToString().ToLowerInvariant(), text = l.Text ?? "" });
                 return Ok(lines);
             });
         }
         catch (InvalidOperationException ex)
+        {
+            return Error(ex.Message);
+        }
+        catch (PromptAccessDeniedException ex)
         {
             return Error(ex.Message);
         }
@@ -202,17 +257,25 @@ public class PromptTools
         {
             return Error(ex.Message);
         }
+        catch (PromptAccessDeniedException ex)
+        {
+            return Error(ex.Message);
+        }
     }
 
-    /// Returns an error envelope if the session is missing/expired/lacks
-    /// admin when required, or null when the caller may proceed.
-    private async Task<string?> RequireAuthAsync(string? sessionToken, bool requireAdmin)
+    /// Returns an error envelope (and null username) if the session is
+    /// missing/expired/lacks admin when required; otherwise null error plus
+    /// the caller's username and admin flag, for ownership checks downstream.
+    private async Task<(string? Error, string? Username, bool IsAdmin)> RequireAuthAsync(string? sessionToken, bool requireAdmin)
     {
-        var (valid, _, isAdmin) = await _auth.ValidateSessionAsync(sessionToken);
-        if (!valid) return Error("Not logged in. Run \"login\" first.");
-        if (requireAdmin && !isAdmin) return Error("Admin privileges required for this command.");
-        return null;
+        var (valid, username, isAdmin) = await _auth.ValidateSessionAsync(sessionToken);
+        if (!valid) return (Error("Not logged in. Run \"login\" first."), null, false);
+        if (requireAdmin && !isAdmin) return (Error("Admin privileges required for this command."), null, false);
+        return (null, username, isAdmin);
     }
+
+    private static string Slugify(string name) =>
+        System.Text.RegularExpressions.Regex.Replace(name.Trim().ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-') is { Length: > 0 } s ? s : "prompt";
 
     private static string Ok(object data) => JsonSerializer.Serialize(new { status = "ok", data }, JsonOptions);
     private static string Error(string message) => JsonSerializer.Serialize(new { status = "error", message }, JsonOptions);

@@ -1,0 +1,162 @@
+@page
+@model PromptVcs.Web.Pages.AdminModel
+@{
+    ViewData["Title"] = "Admin";
+}
+
+<section class="max-w-3xl mx-auto px-6 py-12 sm:py-16">
+    <h1 class="text-2xl sm:text-3xl font-bold mb-2">Admin dashboard</h1>
+    <p class="text-slate-500 dark:text-slate-400 mb-8">Signed in as <strong class="text-slate-800 dark:text-slate-100 font-semibold">@User.Identity!.Name</strong> (admin).</p>
+
+    @if (Model.ErrorMessage != null)
+    {
+        <div class="mb-6 px-4 py-3 rounded-lg border border-red-500 bg-red-500/10 text-red-600 dark:text-red-400 text-sm">@Model.ErrorMessage</div>
+    }
+    @if (Model.SuccessMessage != null)
+    {
+        <div class="mb-6 px-4 py-3 rounded-lg border border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm">@Model.SuccessMessage</div>
+    }
+
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 sm:p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-1">Users</h2>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Everyone registered on this server. Click a user to edit their username, password, or role.</p>
+
+        @if (Model.Users.Count == 0)
+        {
+            <p class="text-slate-500 dark:text-slate-400 text-sm">No users found.</p>
+        }
+        else
+        {
+            <div class="flex flex-col divide-y divide-slate-200 dark:divide-slate-700 mb-5">
+                @foreach (var u in Model.Users)
+                {
+                    <details class="group py-2.5">
+                        <summary class="flex items-center justify-between text-sm cursor-pointer list-none">
+                            <span class="flex items-center gap-2">
+                                <span>@u.Username</span>
+                                @if (u.Username == User.Identity!.Name)
+                                {
+                                    <span class="text-xs text-slate-400 dark:text-slate-500">(you)</span>
+                                }
+                            </span>
+                            <span class="flex items-center gap-3">
+                                @if (u.IsAdmin)
+                                {
+                                    <span class="text-xs font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400 border border-cyan-500 dark:border-cyan-400 rounded-full px-2.5 py-0.5">admin</span>
+                                }
+                                else
+                                {
+                                    <span class="text-xs text-slate-500 dark:text-slate-400">user</span>
+                                }
+                                <span class="text-slate-400 dark:text-slate-500 text-xs group-open:rotate-180 transition-transform">&#9662;</span>
+                            </span>
+                        </summary>
+
+                        <div class="mt-3 pl-1 flex flex-col gap-4">
+                            <form method="post" asp-page-handler="UpdateUser" class="flex flex-col gap-3">
+                                <input type="hidden" name="targetUsername" value="@u.Username" />
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New username</label>
+                                        <input type="text" name="editUsername" placeholder="(unchanged)"
+                                               class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New password</label>
+                                        <input type="password" name="editPassword" placeholder="(unchanged)" minlength="8"
+                                               class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Role</label>
+                                        <select name="editRole" class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm">
+                                            <option value="">(unchanged)</option>
+                                            <option value="true">Admin</option>
+                                            <option value="false">User</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="submit" class="self-start px-4 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors">Save changes</button>
+                            </form>
+
+                            @if (u.Username != User.Identity!.Name)
+                            {
+                                <form method="post" asp-page-handler="DeleteUser"
+                                      onsubmit="return confirm('Delete user \'@u.Username\'? This cannot be undone. Their prompts are kept (still manageable from the Prompts section below), only the account is removed.');">
+                                    <input type="hidden" name="targetUsername" value="@u.Username" />
+                                    <button type="submit" class="px-4 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors">Delete user</button>
+                                </form>
+                            }
+                        </div>
+                    </details>
+                }
+            </div>
+        }
+
+        <details>
+            <summary class="cursor-pointer text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:underline list-none">+ Add a user</summary>
+            <form method="post" asp-page-handler="CreateUser" class="mt-3 flex flex-col gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Username</label>
+                        <input type="text" name="NewUserUsername" value="@Model.NewUserUsername" required
+                               class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Password</label>
+                        <input type="password" name="NewUserPassword" required minlength="8"
+                               class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                    </div>
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="NewUserIsAdmin" value="true" class="rounded border-slate-300 dark:border-slate-600" />
+                    Make this user an admin
+                </label>
+                <button type="submit" class="self-start px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition-colors">Create user</button>
+            </form>
+        </details>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 sm:p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-1">Prompts</h2>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Every prompt on this server, from every user.</p>
+
+        @if (Model.Prompts.Count == 0)
+        {
+            <p class="text-slate-500 dark:text-slate-400 text-sm">No prompts yet.</p>
+        }
+        else
+        {
+            <div class="flex flex-col divide-y divide-slate-200 dark:divide-slate-700">
+                @foreach (var p in Model.Prompts)
+                {
+                    <div class="flex items-center justify-between gap-3 py-2.5 text-sm">
+                        <div class="min-w-0">
+                            <a asp-page="/Prompt" asp-route-name="@p.Name" class="font-medium hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors truncate">@p.Name</a>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">owner: @(p.Owner ?? "(legacy, no owner)")</p>
+                        </div>
+                        <form method="post" asp-page-handler="DeletePrompt"
+                              onsubmit="return confirm('Delete prompt \'@p.Name\'? This cannot be undone.');">
+                            <input type="hidden" name="name" value="@p.Name" />
+                            <button type="submit" class="flex-none px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors">Delete</button>
+                        </form>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 border border-red-500/40 rounded-xl p-5 sm:p-6">
+        <h2 class="text-lg font-semibold mb-1 text-red-600 dark:text-red-400">Danger zone</h2>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Wipes every prompt, QA checkpoint, build record, and generated site on this server, for every user. Cannot be undone.</p>
+        <form method="post" asp-page-handler="Reset" onsubmit="return confirm('This deletes every prompt and generated site on this server, for every user. This cannot be undone. Continue?');">
+            <button type="submit"
+                    class="px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition-colors">
+                Reset entire store
+            </button>
+        </form>
+    </div>
+
+    <p class="mt-8 text-sm">
+        <a asp-page="/Dashboard" class="text-cyan-600 dark:text-cyan-400 hover:underline">Go to the prompt dashboard &rarr;</a>
+    </p>
+</section>

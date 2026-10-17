@@ -40,6 +40,56 @@ public class ServerClient
     public Task<LogoutResultDto> LogoutAsync(string sessionToken) =>
         CallAsync<LogoutResultDto>("logout", new Dictionary<string, object?> { ["sessionToken"] = sessionToken });
 
+    public Task<ChangePasswordResultDto> ChangePasswordAsync(string currentPassword, string newPassword, string sessionToken) =>
+        CallAsync<ChangePasswordResultDto>("changePassword", new Dictionary<string, object?>
+        {
+            ["currentPassword"] = currentPassword,
+            ["newPassword"] = newPassword,
+            ["sessionToken"] = sessionToken,
+        });
+
+    public Task<ChangeUsernameResultDto> ChangeUsernameAsync(string currentPassword, string newUsername, string sessionToken) =>
+        CallAsync<ChangeUsernameResultDto>("changeUsername", new Dictionary<string, object?>
+        {
+            ["currentPassword"] = currentPassword,
+            ["newUsername"] = newUsername,
+            ["sessionToken"] = sessionToken,
+        });
+
+    public Task<WhoAmIResultDto> WhoAmIAsync(string sessionToken) =>
+        CallAsync<WhoAmIResultDto>("whoAmI", new Dictionary<string, object?> { ["sessionToken"] = sessionToken });
+
+    public Task<List<UserSummaryDto>> ListUsersAsync(string sessionToken) =>
+        CallAsync<List<UserSummaryDto>>("listUsers", new Dictionary<string, object?> { ["sessionToken"] = sessionToken });
+
+    public Task<ResetResultDto> ResetAsync(string sessionToken) =>
+        CallAsync<ResetResultDto>("reset", new Dictionary<string, object?> { ["sessionToken"] = sessionToken });
+
+    public Task<CreateUserResultDto> CreateUserAsync(string username, string password, bool isAdmin, string sessionToken) =>
+        CallAsync<CreateUserResultDto>("createUser", new Dictionary<string, object?>
+        {
+            ["username"] = username,
+            ["password"] = password,
+            ["isAdmin"] = isAdmin,
+            ["sessionToken"] = sessionToken,
+        });
+
+    public Task<UpdateUserResultDto> UpdateUserAsync(string targetUsername, string? newUsername, string? newPassword, bool? isAdmin, string sessionToken) =>
+        CallAsync<UpdateUserResultDto>("updateUser", new Dictionary<string, object?>
+        {
+            ["targetUsername"] = targetUsername,
+            ["newUsername"] = newUsername,
+            ["newPassword"] = newPassword,
+            ["isAdmin"] = isAdmin,
+            ["sessionToken"] = sessionToken,
+        });
+
+    public Task<DeleteUserResultDto> DeleteUserAsync(string targetUsername, string sessionToken) =>
+        CallAsync<DeleteUserResultDto>("deleteUser", new Dictionary<string, object?> { ["targetUsername"] = targetUsername, ["sessionToken"] = sessionToken });
+
+    public Task<DeletePromptResultDto> DeletePromptAsync(string name, string sessionToken) =>
+        CallAsync<DeletePromptResultDto>("deletePrompt", new Dictionary<string, object?> { ["name"] = name, ["sessionToken"] = sessionToken });
+
     public Task<PipelineResultDto> CreateAsync(string name, string content, List<AttachmentDto>? attachments, string sessionToken) =>
         CallAsync<PipelineResultDto>("create", new Dictionary<string, object?>
         {

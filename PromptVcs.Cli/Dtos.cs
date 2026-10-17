@@ -12,7 +12,7 @@ public record BuildDto(int BuildVersion, int PromptVersion, string? ArtifactUrl,
 public record PipelineResultDto(string Stage, string PromptId, int Version, QaCheckpointDto Checkpoint, BuildDto? Build, string Message);
 
 public record LatestBuildDto(int BuildVersion, string Status, string? ArtifactUrl);
-public record PromptListItemDto(string Name, int? Dev, int? Qa, int? Prod, LatestBuildDto? LatestBuild);
+public record PromptListItemDto(string Name, string? Owner, int? Dev, int? Qa, int? Prod, LatestBuildDto? LatestBuild);
 
 public record PromptVersionDto(int Version, string Content, DateTimeOffset CreatedAt);
 public record EnvironmentsDto(int? Dev, int? Qa, int? Prod);
@@ -22,6 +22,9 @@ public record ShowResultDto(PromptRecordDto Record, int Version, string Content)
 public record DiffLineDto(string Type, string Text);
 
 public record ResetResultDto(bool Reset);
+public record DeletePromptResultDto(bool Deleted);
 
 public record AuthResultDto(string? SessionToken, bool IsAdmin);
 public record LogoutResultDto(bool LoggedOut);
+public record ChangePasswordResultDto(bool Changed);
+public record ChangeUsernameResultDto(string Username);

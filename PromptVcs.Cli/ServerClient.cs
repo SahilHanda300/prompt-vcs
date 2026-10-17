@@ -28,8 +28,17 @@ public class ServerClient
     public async Task<LogoutResultDto> LogoutAsync(string sessionToken) =>
         await CallAsync<LogoutResultDto>("logout", new Dictionary<string, object?> { ["sessionToken"] = sessionToken }, requireSession: false);
 
+    public async Task<ChangePasswordResultDto> ChangePasswordAsync(string currentPassword, string newPassword) =>
+        await CallAsync<ChangePasswordResultDto>("changePassword", new Dictionary<string, object?> { ["currentPassword"] = currentPassword, ["newPassword"] = newPassword });
+
+    public async Task<ChangeUsernameResultDto> ChangeUsernameAsync(string currentPassword, string newUsername) =>
+        await CallAsync<ChangeUsernameResultDto>("changeUsername", new Dictionary<string, object?> { ["currentPassword"] = currentPassword, ["newUsername"] = newUsername });
+
     public async Task<ResetResultDto> ResetAsync() =>
         await CallAsync<ResetResultDto>("reset", new Dictionary<string, object?>());
+
+    public async Task<DeletePromptResultDto> DeletePromptAsync(string name) =>
+        await CallAsync<DeletePromptResultDto>("deletePrompt", new Dictionary<string, object?> { ["name"] = name });
 
     public async Task<PipelineResultDto> CreateAsync(string name, string content) =>
         await CallAsync<PipelineResultDto>("create", new Dictionary<string, object?> { ["name"] = name, ["content"] = content });

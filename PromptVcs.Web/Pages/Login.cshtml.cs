@@ -39,7 +39,11 @@ public class LoginModel : PageModel
         {
             var result = await _client.LoginAsync(Username.Trim(), Password);
             await SignInAsync(Username.Trim(), result.SessionToken!, result.IsAdmin);
-            return LocalRedirect(string.IsNullOrEmpty(returnUrl) || !Url.IsLocalUrl(returnUrl) ? "/Dashboard" : returnUrl);
+            // An explicit returnUrl (e.g. bounced here from a deep link)
+            // still wins; otherwise an admin's default landing page is the
+            // admin dashboard, not the regular prompt dashboard.
+            var defaultPage = result.IsAdmin ? "/Admin" : "/Dashboard";
+            return LocalRedirect(string.IsNullOrEmpty(returnUrl) || !Url.IsLocalUrl(returnUrl) ? defaultPage : returnUrl);
         }
         catch (InvalidOperationException ex)
         {
@@ -50,13 +54,9 @@ public class LoginModel : PageModel
 
     private async Task SignInAsync(string username, string sessionToken, bool isAdmin)
     {
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.Name, username),
-            new(ClaimsPrincipalExtensions.SessionTokenClaimType, sessionToken),
-            new(ClaimsPrincipalExtensions.IsAdminClaimType, isAdmin ? "true" : "false"),
-        };
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var identity = new ClaimsIdentity(
+            ClaimsPrincipalExtensions.BuildClaims(username, sessionToken, isAdmin),
+            CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity),

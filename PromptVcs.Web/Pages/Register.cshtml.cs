@@ -46,7 +46,10 @@ public class RegisterModel : PageModel
         {
             var result = await _client.RegisterAsync(Username.Trim(), Password);
             await SignInAsync(Username.Trim(), result.SessionToken!, result.IsAdmin);
-            return LocalRedirect("/Dashboard");
+            // The very first user ever registered becomes admin automatically
+            // (see MongoAuthService) — they land on the admin dashboard from
+            // the start, not the regular prompt dashboard.
+            return LocalRedirect(result.IsAdmin ? "/Admin" : "/Dashboard");
         }
         catch (InvalidOperationException ex)
         {
@@ -57,13 +60,9 @@ public class RegisterModel : PageModel
 
     private async Task SignInAsync(string username, string sessionToken, bool isAdmin)
     {
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.Name, username),
-            new(ClaimsPrincipalExtensions.SessionTokenClaimType, sessionToken),
-            new(ClaimsPrincipalExtensions.IsAdminClaimType, isAdmin ? "true" : "false"),
-        };
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var identity = new ClaimsIdentity(
+            ClaimsPrincipalExtensions.BuildClaims(username, sessionToken, isAdmin),
+            CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity),

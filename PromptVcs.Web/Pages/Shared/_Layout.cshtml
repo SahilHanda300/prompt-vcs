@@ -5,9 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>@ViewData["Title"] — PromptVCS</title>
 <link rel="icon" type="image/svg+xml" href="~/favicon.svg">
+<script>
+    // Runs synchronously, before Tailwind loads/paints anything, so the
+    // page never flashes the wrong theme for a frame. Explicit choice
+    // (localStorage) wins; otherwise falls back to the OS/browser
+    // preference. Tailwind's class-based dark mode just checks for this
+    // "dark" class on <html>, so setting it this early is all that's needed.
+    (function () {
+        var stored = localStorage.getItem('promptvcs-theme');
+        var wantsDark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (wantsDark) document.documentElement.classList.add('dark');
+    })();
+</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
     tailwind.config = {
+        darkMode: 'class',
         theme: {
             extend: {
                 fontFamily: {
@@ -19,8 +32,8 @@
     };
 </script>
 </head>
-<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans antialiased overflow-x-hidden">
-<header class="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-8 py-4 border-b border-slate-800">
+<body class="min-h-screen flex flex-col bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-x-hidden transition-colors duration-200">
+<header class="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-8 py-4 border-b border-slate-200 dark:border-slate-700">
     <a href="/" class="flex items-center gap-2 font-semibold text-base sm:text-lg">
         <svg viewBox="0 0 64 64" aria-hidden="true" class="w-7 h-7">
             <rect width="64" height="64" rx="14" fill="#0f172a" />
@@ -32,17 +45,32 @@
     <nav class="flex items-center gap-3 sm:gap-5 text-sm">
         @if (User.Identity?.IsAuthenticated == true)
         {
-            <span class="hidden sm:inline text-slate-400">@User.Identity!.Name</span>
-            <a href="/Dashboard" class="hover:text-cyan-400 transition-colors">Dashboard</a>
+            <span class="hidden sm:inline text-slate-500 dark:text-slate-400">@User.Identity!.Name</span>
+            @if (User.IsPromptVcsAdmin())
+            {
+                <a href="/Admin" class="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">Admin</a>
+            }
+            <a href="/Dashboard" class="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">Dashboard</a>
+            <a href="/Settings" class="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">Settings</a>
             <form method="post" asp-page="/Logout" class="inline">
-                <button type="submit" class="px-4 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold transition-colors">Log out</button>
+                <button type="submit" class="px-4 py-2 rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-semibold transition-colors">Log out</button>
             </form>
         }
         else
         {
-            <a href="/Login" class="hover:text-cyan-400 transition-colors">Log in</a>
+            <a href="/Login" class="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">Log in</a>
             <a href="/Register" class="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold transition-colors">Get started</a>
         }
+        <button id="themeToggle" type="button" aria-label="Toggle dark mode"
+                class="p-2 rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100 transition-colors">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="w-5 h-5 block dark:hidden">
+                <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2" />
+                <path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v2M12 20v2M4 12H2M22 12h-2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+            </svg>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="w-5 h-5 hidden dark:block">
+                <path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />
+            </svg>
+        </button>
     </nav>
 </header>
 
@@ -50,9 +78,15 @@
     @RenderBody()
 </main>
 
-<footer class="text-center py-6 text-slate-400 text-xs sm:text-sm border-t border-slate-800">
+<footer class="text-center py-6 text-slate-500 dark:text-slate-400 text-xs sm:text-sm border-t border-slate-200 dark:border-slate-700">
     <span>PromptVCS — version control for prompts</span>
 </footer>
+<script>
+    document.getElementById('themeToggle').addEventListener('click', function () {
+        var isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('promptvcs-theme', isDark ? 'dark' : 'light');
+    });
+</script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

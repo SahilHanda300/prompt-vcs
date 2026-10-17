@@ -19,8 +19,11 @@ var commandUsage = new Dictionary<string, string>
     // so they're an implementation detail rather than something to
     // advertise for manual typing.
     ["logout"] = "logout",
+    ["passwd"] = "passwd <currentPassword> <newPassword>",
+    ["rename"] = "rename <newUsername> <currentPassword>",
     ["create"] = "create <name> [--content <text> | --file <path>]",
     ["edit"] = "edit <name> [--content <text> | --file <path>]",
+    ["delete"] = "delete <name>",
     ["list"] = "list",
     ["show"] = "show <name> [--version <n>]",
     ["diff"] = "diff <name> <v1> <v2>",
@@ -79,11 +82,20 @@ async Task<int> RunCommandAsync(string[] cmdArgs)
             case "logout":
                 await RunLogoutAsync();
                 break;
+            case "passwd":
+                await RunPasswdAsync(RequireArg(cmdArgs, 1, "currentPassword"), RequireArg(cmdArgs, 2, "newPassword"));
+                break;
+            case "rename":
+                await RunRenameAsync(RequireArg(cmdArgs, 1, "newUsername"), RequireArg(cmdArgs, 2, "currentPassword"));
+                break;
             case "create":
                 await RunCreateAsync(RequireArg(cmdArgs, 1, "name"), ReadContent(cmdArgs, isInteractive));
                 break;
             case "edit":
                 await RunEditAsync(RequireArg(cmdArgs, 1, "name"), ReadContent(cmdArgs, isInteractive));
+                break;
+            case "delete":
+                await RunDeleteAsync(RequireArg(cmdArgs, 1, "name"));
                 break;
             case "list":
                 await RunListAsync();
@@ -212,6 +224,26 @@ async Task RunLogoutAsync()
     WriteLineColor("Logged out.", ConsoleColor.Green);
 }
 
+async Task RunPasswdAsync(string currentPassword, string newPassword)
+{
+    await client.ChangePasswordAsync(currentPassword, newPassword);
+    WriteLineColor("Password changed.", ConsoleColor.Green);
+}
+
+async Task RunRenameAsync(string newUsername, string currentPassword)
+{
+    var result = await client.ChangeUsernameAsync(currentPassword, newUsername);
+    // Session token and admin status are unaffected by a rename — only the
+    // cached username needs updating, same as the web app re-issuing its
+    // auth cookie's username claim after a successful change.
+    var cached = SessionCache.Load();
+    if (cached != null)
+    {
+        SessionCache.Save(cached with { Username = result.Username });
+    }
+    WriteLineColor($"Username changed to {result.Username}.", ConsoleColor.Green);
+}
+
 async Task RunResetAsync()
 {
     await client.ResetAsync();
@@ -230,6 +262,12 @@ async Task RunEditAsync(string name, string content)
     PrintPipelineResult(result);
 }
 
+async Task RunDeleteAsync(string name)
+{
+    await client.DeletePromptAsync(name);
+    WriteLineColor($"Deleted \"{name}\".", ConsoleColor.Yellow);
+}
+
 async Task RunListAsync()
 {
     var items = await client.ListAsync();
@@ -238,14 +276,18 @@ async Task RunListAsync()
         Console.WriteLine("No prompts yet. Use `prompt-vcs create <name>` to add one.");
         return;
     }
-    Console.WriteLine(string.Join("\t", "name", "dev", "qa", "prod", "latest build"));
+    // "owner" only means something when the caller can see more than their
+    // own prompts (i.e. an admin — see the server's ownership scoping) —
+    // for a normal user every row is their own, so the column would just
+    // repeat their own username uselessly.
+    var showOwner = items.Any(r => r.Owner != null) && items.Select(r => r.Owner).Distinct().Count() > 1;
+    Console.WriteLine(string.Join("\t", showOwner ? new[] { "name", "owner", "dev", "qa", "prod", "latest build" } : new[] { "name", "dev", "qa", "prod", "latest build" }));
     foreach (var r in items)
     {
-        Console.Write(string.Join("\t",
-            r.Name,
-            r.Dev?.ToString() ?? "-",
-            r.Qa?.ToString() ?? "-",
-            r.Prod?.ToString() ?? "-") + "\t");
+        var cols = showOwner
+            ? new[] { r.Name, r.Owner ?? "-", r.Dev?.ToString() ?? "-", r.Qa?.ToString() ?? "-", r.Prod?.ToString() ?? "-" }
+            : new[] { r.Name, r.Dev?.ToString() ?? "-", r.Qa?.ToString() ?? "-", r.Prod?.ToString() ?? "-" };
+        Console.Write(string.Join("\t", cols) + "\t");
         if (r.LatestBuild != null)
         {
             WriteColor($"{r.LatestBuild.Status} (v{r.LatestBuild.BuildVersion})", BuildStatusColor(r.LatestBuild.Status));
@@ -501,8 +543,11 @@ static void PrintUsage()
     Console.WriteLine();
     Console.WriteLine("Commands:");
     PrintCommand("logout", "Logs out of the current session");
+    PrintCommand("passwd <currentPassword> <newPassword>", "Changes your password");
+    PrintCommand("rename <newUsername> <currentPassword>", "Changes your username");
     PrintCommand("create <name> [--content <text> | --file <path>]", "Creates a new app from a prompt");
     PrintCommand("edit <name> [--content <text> | --file <path>]", "Updates an existing app with a new prompt");
+    PrintCommand("delete <name>", "Deletes a prompt (owner or admin only)");
     PrintCommand("list", "Lists all apps");
     PrintCommand("show <name> [--version <n>]", "Shows a specific version of an app");
     PrintCommand("diff <name> <v1> <v2>", "Shows the differences between two versions of an app");
