@@ -1,6 +1,9 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using PromptVcs.Web;
 
 // How often an already-signed-in cookie's role/username is re-checked
@@ -26,6 +29,21 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddSingleton<ServerClient>();
+
+// Keeps antiforgery tokens and the auth cookie valid across a Render
+// free-tier idle spin-down/wake (or any restart) — without this, the
+// default Data Protection keyring lives only on the container's ephemeral
+// disk, so every restart invalidates every form open in a browser and
+// signs every logged-in user out. See McpXmlRepository.
+builder.Services.AddHttpClient<McpXmlRepository>(client =>
+{
+    client.BaseAddress = new Uri(ServerClient.SiteBaseUrl() + "/");
+    var secret = Environment.GetEnvironmentVariable("PROMPTVCS_INTERNAL_SECRET");
+    if (!string.IsNullOrEmpty(secret)) client.DefaultRequestHeaders.Add("X-Internal-Secret", secret);
+});
+builder.Services.AddDataProtection().SetApplicationName("PromptVcsWeb");
+builder.Services.AddOptions<KeyManagementOptions>()
+    .Configure<McpXmlRepository>((options, repo) => options.XmlRepository = repo);
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>

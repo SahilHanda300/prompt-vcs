@@ -34,6 +34,7 @@ builder.Services.AddSignalR(options =>
 
 builder.Services.AddSingleton<MongoDatabaseProvider>();
 builder.Services.AddSingleton<IServerStore, ServerStore>();
+builder.Services.AddSingleton<IDataProtectionKeyStore, MongoDataProtectionKeyStore>();
 builder.Services.AddSingleton<RunnerRegistry>();
 builder.Services.AddSingleton<RunnerDispatchInvoker>();
 builder.Services.AddSingleton<IClaudeCodeInvoker>(sp => sp.GetRequiredService<RunnerDispatchInvoker>());
@@ -97,6 +98,30 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapGet("/", () => "PromptVCS MCP server is running. MCP endpoint: /mcp, runner hub: /runnerhub, artifacts: /site/<promptId>/, terminal: /terminal");
 app.MapGet("/terminal", () => Results.Redirect("/terminal.html"));
 
+// Server-to-server only (PromptVcs.Web's Data Protection keyring, see
+// IDataProtectionKeyStore) — gated by a shared secret, not a user session,
+// since there's no logged-in user at the point Web needs to read/write its
+// own keyring. Not a security boundary against a determined attacker who
+// also has the secret, same trust model as PROMPTVCS_RUNNER_TOKEN.
+bool InternalRequestAuthorized(HttpContext ctx)
+{
+    var expected = Environment.GetEnvironmentVariable("PROMPTVCS_INTERNAL_SECRET");
+    if (string.IsNullOrEmpty(expected)) return false;
+    return ctx.Request.Headers["X-Internal-Secret"] == expected;
+}
+
+app.MapGet("/internal/dataprotection-keys", async (HttpContext ctx, IDataProtectionKeyStore store) =>
+{
+    if (!InternalRequestAuthorized(ctx)) return Results.Unauthorized();
+    return Results.Ok(await store.GetAllAsync());
+});
+app.MapPost("/internal/dataprotection-keys", async (HttpContext ctx, IDataProtectionKeyStore store, DataProtectionKeyUpload body) =>
+{
+    if (!InternalRequestAuthorized(ctx)) return Results.Unauthorized();
+    await store.StoreAsync(body.Id, body.Xml);
+    return Results.Ok();
+});
+
 // CLI-facing auth on /mcp is now per-user, via MongoDB-backed login (see
 // AuthTools/MongoAuthService) rather than a single shared token: every tool
 // except login/register validates a sessionToken argument itself. There is
@@ -141,6 +166,10 @@ app.Lifetime.ApplicationStarted.Register(() =>
     {
         WriteWarning("  Warning: PROMPTVCS_MONGO_URI is not set — MongoDB now backs both auth and the prompt store itself, so every command will fail.");
     }
+    if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROMPTVCS_INTERNAL_SECRET")))
+    {
+        WriteWarning("  Warning: PROMPTVCS_INTERNAL_SECRET is not set — PromptVcs.Web can't persist its Data Protection keyring, so it will stay ephemeral.");
+    }
 });
 
 static void WriteWarning(string text)
@@ -152,3 +181,5 @@ static void WriteWarning(string text)
 }
 
 app.Run();
+
+record DataProtectionKeyUpload(string Id, string Xml);
