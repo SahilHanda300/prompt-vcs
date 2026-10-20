@@ -10,50 +10,46 @@
 
     <partial name="_Toast" model="new ToastData(Model.ErrorMessage, Model.SuccessMessage)" />
 
+    <div class="flex gap-1 mb-6 border-b border-slate-200 dark:border-slate-700" role="tablist">
+        <button type="button" data-tab="users" class="admin-tab px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors">Account &amp; Users</button>
+        <button type="button" data-tab="prompts" class="admin-tab px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors">Prompts</button>
+        <button type="button" data-tab="danger" class="admin-tab px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors">Danger Zone</button>
+    </div>
+
+    <div id="tab-users" class="admin-panel">
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 sm:p-6 mb-6">
         <h2 class="text-lg font-semibold mb-1">Your account</h2>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Change your own username or password. Both require your current password — unlike editing another user below, this isn't an admin override.</p>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Enter your current password once, plus whichever of a new username or new password you want to change.</p>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <form method="post" asp-page-handler="ChangeUsername" class="flex flex-col gap-3">
-                <div>
-                    <label for="NewUsername" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New username</label>
-                    <input type="text" id="NewUsername" name="NewUsername" value="@Model.NewUsername" autocomplete="username" required
-                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-                </div>
-                <div>
-                    <label for="UsernamePassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Current password</label>
-                    <input type="password" id="UsernamePassword" name="UsernamePassword" autocomplete="current-password" required
-                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-                </div>
-                <button type="submit" class="self-start px-4 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors">Save username</button>
-            </form>
-
-            <form method="post" asp-page-handler="ChangePassword" class="flex flex-col gap-3">
-                <div>
-                    <label for="CurrentPassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Current password</label>
-                    <input type="password" id="CurrentPassword" name="CurrentPassword" autocomplete="current-password" required
-                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-                </div>
-                <div>
-                    <label for="NewPassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New password (8+ chars, letters and numbers)</label>
-                    <input type="password" id="NewPassword" name="NewPassword" autocomplete="new-password" minlength="8" required
-                           pattern="(?=.*[A-Za-z])(?=.*\d).{8,}" title="At least 8 characters, with letters and numbers"
-                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-                </div>
-                <div>
-                    <label for="ConfirmNewPassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Confirm new password</label>
-                    <input type="password" id="ConfirmNewPassword" name="ConfirmNewPassword" autocomplete="new-password" minlength="8" required
-                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-                </div>
-                <button type="submit" class="self-start px-4 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors">Save password</button>
-            </form>
-        </div>
+        <form method="post" asp-page-handler="UpdateAccount" class="flex flex-col gap-3 max-w-sm">
+            <div>
+                <label for="CurrentPassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Current password</label>
+                <input type="password" id="CurrentPassword" name="CurrentPassword" autocomplete="current-password"
+                       class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+            </div>
+            <div>
+                <label for="NewUsername" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New username (optional)</label>
+                <input type="text" id="NewUsername" name="NewUsername" value="@Model.NewUsername" autocomplete="username"
+                       class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+            </div>
+            <div>
+                <label for="NewPassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New password (optional, 8+ chars with letters and numbers)</label>
+                <input type="password" id="NewPassword" name="NewPassword" autocomplete="new-password" minlength="8"
+                       pattern="(?=.*[A-Za-z])(?=.*\d).{8,}" title="At least 8 characters, with letters and numbers"
+                       class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+            </div>
+            <div>
+                <label for="ConfirmNewPassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Confirm new password</label>
+                <input type="password" id="ConfirmNewPassword" name="ConfirmNewPassword" autocomplete="new-password" minlength="8"
+                       class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+            </div>
+            <button type="submit" class="self-start px-4 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors">Save</button>
+        </form>
     </div>
 
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 sm:p-6 mb-6">
         <h2 class="text-lg font-semibold mb-1">Users</h2>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Everyone registered on this server. Click a user to edit their username, password, or role — no password confirmation needed, this is an admin override.</p>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Click a user to edit their username, password, or role.</p>
 
         @if (Model.Users.Count == 0)
         {
@@ -138,12 +134,12 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Username</label>
-                        <input type="text" name="NewUserUsername" value="@Model.NewUserUsername" required
+                        <input type="text" name="NewUserUsername" value="@Model.NewUserUsername"
                                class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
                     </div>
                     <div>
                         <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Password (8+ chars, letters and numbers)</label>
-                        <input type="password" name="NewUserPassword" required minlength="8"
+                        <input type="password" name="NewUserPassword" minlength="8"
                                pattern="(?=.*[A-Za-z])(?=.*\d).{8,}" title="At least 8 characters, with letters and numbers"
                                class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
                     </div>
@@ -156,7 +152,9 @@
             </form>
         </details>
     </div>
+    </div>
 
+    <div id="tab-prompts" class="admin-panel hidden">
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 sm:p-6 mb-6">
         <h2 class="text-lg font-semibold mb-1">Prompts</h2>
         <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Every prompt on this server, grouped by owner. Click a user to see theirs.</p>
@@ -200,7 +198,9 @@
             </div>
         }
     </div>
+    </div>
 
+    <div id="tab-danger" class="admin-panel hidden">
     <div class="bg-white dark:bg-slate-800 border border-red-500/40 rounded-xl p-5 sm:p-6">
         <h2 class="text-lg font-semibold mb-1 text-red-600 dark:text-red-400">Danger zone</h2>
         <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Wipes every prompt, QA checkpoint, build record, and generated site on this server, for every user. Cannot be undone.</p>
@@ -211,8 +211,40 @@
             </button>
         </form>
     </div>
+    </div>
 
     <p class="mt-8 text-sm">
         <a asp-page="/Dashboard" class="text-cyan-600 dark:text-cyan-400 hover:underline">Go to the prompt dashboard &rarr;</a>
     </p>
 </section>
+
+@section Scripts {
+    <script>
+        (function () {
+            var tabs = document.querySelectorAll('.admin-tab');
+            var panels = { users: document.getElementById('tab-users'), prompts: document.getElementById('tab-prompts'), danger: document.getElementById('tab-danger') };
+            var activeClasses = ['border-cyan-500', 'text-cyan-600', 'dark:text-cyan-400'];
+            var inactiveClasses = ['border-transparent', 'text-slate-500', 'dark:text-slate-400'];
+
+            function setTab(name) {
+                tabs.forEach(function (tab) {
+                    var isActive = tab.dataset.tab === name;
+                    tab.classList.remove.apply(tab.classList, activeClasses.concat(inactiveClasses));
+                    tab.classList.add.apply(tab.classList, isActive ? activeClasses : inactiveClasses);
+                });
+                Object.keys(panels).forEach(function (key) {
+                    panels[key].classList.toggle('hidden', key !== name);
+                });
+                try { localStorage.setItem('promptvcs-admin-tab', name); } catch (e) { }
+            }
+
+            tabs.forEach(function (tab) {
+                tab.addEventListener('click', function () { setTab(tab.dataset.tab); });
+            });
+
+            var stored = null;
+            try { stored = localStorage.getItem('promptvcs-admin-tab'); } catch (e) { }
+            setTab(panels[stored] ? stored : 'users');
+        })();
+    </script>
+}

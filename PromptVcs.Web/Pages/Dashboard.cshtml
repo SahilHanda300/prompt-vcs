@@ -15,13 +15,13 @@
         <form method="post" asp-page-handler="Create" enctype="multipart/form-data" class="flex flex-col gap-4">
             <div>
                 <label for="NewPromptName" class="block text-sm font-medium mb-1.5">Name</label>
-                <input type="text" id="NewPromptName" name="NewPromptName" value="@Model.NewPromptName" required maxlength="80"
+                <input type="text" id="NewPromptName" name="NewPromptName" value="@Model.NewPromptName" maxlength="80"
                        placeholder="e.g. coffee-shop-landing"
                        class="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
             </div>
             <div>
                 <label for="NewPromptContent" class="block text-sm font-medium mb-1.5">Prompt</label>
-                <textarea id="NewPromptContent" name="NewPromptContent" required rows="4"
+                <textarea id="NewPromptContent" name="NewPromptContent" rows="4"
                           placeholder="Describe the site or app you want..."
                           class="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400">@Model.NewPromptContent</textarea>
             </div>

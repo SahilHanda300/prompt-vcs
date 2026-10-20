@@ -36,14 +36,17 @@ public class AdminModel : PageModel
     // per-row edit form further down is for managing OTHER users and
     // deliberately has no such requirement — that's an admin override, not
     // a self-service account change.
-    [BindProperty]
-    public string NewUsername { get; set; } = "";
-
-    [BindProperty]
-    public string UsernamePassword { get; set; } = "";
-
+    //
+    // One CurrentPassword field covers both a username change and a
+    // password change — originally two separate forms, each with its own
+    // "current password" field, meaning changing both on one visit meant
+    // typing the same password twice. Either NewUsername or NewPassword
+    // (or both) may be filled in; CurrentPassword is always required.
     [BindProperty]
     public string CurrentPassword { get; set; } = "";
+
+    [BindProperty]
+    public string NewUsername { get; set; } = "";
 
     [BindProperty]
     public string NewPassword { get; set; } = "";
@@ -64,51 +67,22 @@ public class AdminModel : PageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnPostChangeUsernameAsync()
+    public async Task<IActionResult> OnPostUpdateAccountAsync()
     {
         var (tokenOrNull, redirect) = RequireAdmin();
         if (redirect != null) return redirect;
         var token = tokenOrNull!;
 
-        if (string.IsNullOrWhiteSpace(NewUsername) || string.IsNullOrWhiteSpace(UsernamePassword))
+        var wantsUsernameChange = !string.IsNullOrWhiteSpace(NewUsername);
+        var wantsPasswordChange = !string.IsNullOrWhiteSpace(NewPassword);
+
+        if (string.IsNullOrWhiteSpace(CurrentPassword) || (!wantsUsernameChange && !wantsPasswordChange))
         {
-            ErrorMessage = "New username and your current password are both required.";
+            ErrorMessage = "Enter your current password, and a new username and/or new password.";
             await LoadAsync(token);
             return Page();
         }
-
-        try
-        {
-            var result = await _client.ChangeUsernameAsync(UsernamePassword, NewUsername.Trim(), token);
-            // Re-issue the cookie with the new name — otherwise the page
-            // (and the rest of the app) would keep showing the old
-            // username until the cookie's natural 30-day expiry.
-            await SignInAsync(result.Username, token, isAdmin: true);
-            SuccessMessage = $"Username changed to \"{result.Username}\".";
-            NewUsername = "";
-            UsernamePassword = "";
-        }
-        catch (InvalidOperationException ex)
-        {
-            ErrorMessage = ex.Message;
-        }
-        await LoadAsync(token);
-        return Page();
-    }
-
-    public async Task<IActionResult> OnPostChangePasswordAsync()
-    {
-        var (tokenOrNull, redirect) = RequireAdmin();
-        if (redirect != null) return redirect;
-        var token = tokenOrNull!;
-
-        if (string.IsNullOrWhiteSpace(CurrentPassword) || string.IsNullOrWhiteSpace(NewPassword))
-        {
-            ErrorMessage = "Current and new password are both required.";
-            await LoadAsync(token);
-            return Page();
-        }
-        if (NewPassword != ConfirmNewPassword)
+        if (wantsPasswordChange && NewPassword != ConfirmNewPassword)
         {
             ErrorMessage = "New password and confirmation don't match.";
             await LoadAsync(token);
@@ -117,9 +91,30 @@ public class AdminModel : PageModel
 
         try
         {
-            await _client.ChangePasswordAsync(CurrentPassword, NewPassword, token);
-            SuccessMessage = "Password changed.";
+            var successes = new List<string>();
+
+            // Username first — it doesn't touch the password hash, so
+            // CurrentPassword is still valid for the password change below
+            // regardless of order.
+            if (wantsUsernameChange)
+            {
+                var result = await _client.ChangeUsernameAsync(CurrentPassword, NewUsername.Trim(), token);
+                // Re-issue the cookie with the new name — otherwise the page
+                // (and the rest of the app) would keep showing the old
+                // username until the cookie's natural 30-day expiry.
+                await SignInAsync(result.Username, token, isAdmin: true);
+                successes.Add($"username changed to \"{result.Username}\"");
+            }
+            if (wantsPasswordChange)
+            {
+                await _client.ChangePasswordAsync(CurrentPassword, NewPassword, token);
+                successes.Add("password changed");
+            }
+
+            SuccessMessage = char.ToUpperInvariant(successes[0][0]) + successes[0][1..] +
+                (successes.Count > 1 ? " and " + successes[1] : "") + ".";
             CurrentPassword = "";
+            NewUsername = "";
             NewPassword = "";
             ConfirmNewPassword = "";
         }
