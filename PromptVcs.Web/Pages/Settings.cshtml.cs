@@ -34,6 +34,11 @@ public class SettingsModel : PageModel
     public string? SuccessMessage { get; set; }
     public string CurrentUsername => User.Identity?.Name ?? "";
 
+    // Carries the success message across the redirect that follows a
+    // username change — see OnPostChangeUsernameAsync.
+    [TempData]
+    public string? FlashSuccessMessage { get; set; }
+
     public IActionResult OnGet()
     {
         // Admins manage their own username/password from the Admin panel
@@ -42,6 +47,7 @@ public class SettingsModel : PageModel
         // where they lived, so an admin landing here gets sent to the one
         // place that still has them.
         if (User.IsPromptVcsAdmin()) return RedirectToPage("/Admin");
+        SuccessMessage ??= FlashSuccessMessage;
         return Page();
     }
 
@@ -64,9 +70,11 @@ public class SettingsModel : PageModel
             // (and the rest of the app would keep acting as) the old name
             // until the cookie naturally expired.
             await SignInAsync(result.Username, token, User.IsPromptVcsAdmin());
-            SuccessMessage = $"Username changed to \"{result.Username}\".";
-            NewUsername = "";
-            UsernamePassword = "";
+            // Redirect, not Page() — see Admin.cshtml.cs's OnPostUpdateAccountAsync
+            // for why re-rendering here would leave a stale antiforgery token
+            // that fails the next submission.
+            FlashSuccessMessage = $"Username changed to \"{result.Username}\".";
+            return RedirectToPage();
         }
         catch (InvalidOperationException ex)
         {
@@ -111,9 +119,13 @@ public class SettingsModel : PageModel
         var identity = new ClaimsIdentity(
             ClaimsPrincipalExtensions.BuildClaims(username, sessionToken, isAdmin),
             CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(identity);
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
-            new ClaimsPrincipal(identity),
+            principal,
             new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30) });
+        // See Admin.cshtml.cs's SignInAsync for why this line is needed —
+        // same same-request antiforgery/username mismatch.
+        HttpContext.User = principal;
     }
 }
