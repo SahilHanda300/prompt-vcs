@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
 
@@ -13,11 +12,11 @@ namespace PromptVcs.Core;
 /// {"status":"error"} envelope either way.
 public class PromptAccessDeniedException(string message) : Exception(message);
 
-public class PromptService
+public class PromptService : IPromptService
 {
-    private readonly Pipeline _pipeline;
+    private readonly IPipelineService _pipeline;
 
-    public PromptService(Pipeline pipeline)
+    public PromptService(IPipelineService pipeline)
     {
         _pipeline = pipeline;
     }
@@ -44,17 +43,13 @@ public class PromptService
     /// (generated artifacts) — callers with access to the site directory
     /// (currently only PromptTools, same as "reset") delete that
     /// separately, same division of responsibility "reset" already has.
-    public static void Delete(Store store, string name, string callerUsername, bool callerIsAdmin)
+    public void Delete(Store store, string name, string callerUsername, bool callerIsAdmin)
     {
         var record = GetOwnedOrThrow(store, name, callerUsername, callerIsAdmin);
         store.Prompts.Remove(record.Id);
     }
 
-    /// Called whenever a username changes (self-service rename or an
-    /// admin renaming someone else) — without this, every prompt that
-    /// user owns would silently become inaccessible to them (Owner would
-    /// still hold the OLD username, which no longer belongs to anyone).
-    public static void RenameOwner(Store store, string oldUsername, string newUsername)
+    public void RenameOwner(Store store, string oldUsername, string newUsername)
     {
         foreach (var record in store.Prompts.Values)
         {
@@ -65,17 +60,13 @@ public class PromptService
         }
     }
 
-    /// Admins see every prompt; everyone else sees only their own plus any
-    /// "legacy" prompt with no recorded owner (created before ownership
-    /// existed — treated as visible to all, same as this project's
-    /// original fully-open behavior, rather than orphaned/hidden).
-    public static List<PromptRecord> List(Store store, string callerUsername, bool callerIsAdmin) =>
+    public List<PromptRecord> List(Store store, string callerUsername, bool callerIsAdmin) =>
         store.Prompts.Values
             .Where(r => callerIsAdmin || r.Owner == null || r.Owner == callerUsername)
             .OrderBy(r => r.Name, StringComparer.Ordinal)
             .ToList();
 
-    public static (PromptRecord Record, int Version, string Content) Show(Store store, string name, string callerUsername, bool callerIsAdmin, int? version = null)
+    public (PromptRecord Record, int Version, string Content) Show(Store store, string name, string callerUsername, bool callerIsAdmin, int? version = null)
     {
         var record = GetOwnedOrThrow(store, name, callerUsername, callerIsAdmin);
         var targetVersion = version ?? record.Environments.Prod ?? record.History.LastOrDefault()?.Version;
@@ -87,7 +78,7 @@ public class PromptService
         return (record, entry.Version, entry.Content);
     }
 
-    public static DiffPaneModel Diff(Store store, string name, int v1, int v2, string callerUsername, bool callerIsAdmin)
+    public DiffPaneModel Diff(Store store, string name, int v1, int v2, string callerUsername, bool callerIsAdmin)
     {
         var record = GetOwnedOrThrow(store, name, callerUsername, callerIsAdmin);
         var e1 = record.History.FirstOrDefault(h => h.Version == v1) ?? throw new InvalidOperationException($"Version {v1} not found for prompt \"{name}\".");

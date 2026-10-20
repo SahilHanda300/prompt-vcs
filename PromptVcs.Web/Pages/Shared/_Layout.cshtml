@@ -45,21 +45,69 @@
     <nav class="flex items-center gap-3 sm:gap-5 text-sm">
         @if (User.Identity?.IsAuthenticated == true)
         {
-            <span class="hidden sm:inline text-slate-500 dark:text-slate-400">@User.Identity!.Name</span>
+            <span class="hidden sm:flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 flex-none">
+                    <circle cx="12" cy="8" r="3.25" />
+                    <path stroke-linecap="round" d="M5.5 20c1.1-3.4 3.9-5.25 6.5-5.25S17.4 16.6 18.5 20" />
+                </svg>
+                @User.Identity!.Name
+            </span>
             @if (User.IsPromptVcsAdmin())
             {
-                <a href="/Admin" class="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">Admin</a>
+                <a href="/Admin" class="flex items-center gap-1.5 hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 flex-none">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4" />
+                    </svg>
+                    <span class="hidden sm:inline">Admin</span>
+                </a>
             }
-            <a href="/Dashboard" class="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">Dashboard</a>
-            <a href="/Settings" class="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">Settings</a>
+            <a href="/Dashboard" class="flex items-center gap-1.5 hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 flex-none">
+                    <rect x="3.5" y="3.5" width="7" height="7" rx="1.25" />
+                    <rect x="13.5" y="3.5" width="7" height="7" rx="1.25" />
+                    <rect x="3.5" y="13.5" width="7" height="7" rx="1.25" />
+                    <rect x="13.5" y="13.5" width="7" height="7" rx="1.25" />
+                </svg>
+                <span class="hidden sm:inline">Dashboard</span>
+            </a>
+            @if (!User.IsPromptVcsAdmin())
+            {
+                <a href="/Settings" class="flex items-center gap-1.5 hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 flex-none">
+                        <circle cx="12" cy="12" r="2.75" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.6-1.4-1.5-2.6-2 .6a7.6 7.6 0 0 0-2.6-1.5l-.4-2.1h-3l-.4 2.1a7.6 7.6 0 0 0-2.6 1.5l-2-.6-1.5 2.6 1.6 1.4a7.6 7.6 0 0 0 0 3l-1.6 1.4 1.5 2.6 2-.6a7.6 7.6 0 0 0 2.6 1.5l.4 2.1h3l.4-2.1a7.6 7.6 0 0 0 2.6-1.5l2 .6 1.5-2.6-1.6-1.4z" />
+                    </svg>
+                    <span class="hidden sm:inline">Settings</span>
+                </a>
+            }
             <form method="post" asp-page="/Logout" class="inline">
-                <button type="submit" class="px-4 py-2 rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-semibold transition-colors">Log out</button>
+                <button type="submit" class="flex items-center gap-1.5 px-4 py-2 rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-semibold transition-colors">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 flex-none">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 7V5.5A1.5 1.5 0 0 0 13.5 4h-7A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20h7a1.5 1.5 0 0 0 1.5-1.5V17" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 12H9.5m9.5 0l-3-3m3 3l-3 3" />
+                    </svg>
+                    <span class="hidden sm:inline">Log out</span>
+                </button>
             </form>
         }
         else
         {
-            <a href="/Login" class="hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">Log in</a>
-            <a href="/Register" class="px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold transition-colors">Get started</a>
+            <a href="/Login" class="flex items-center gap-1.5 hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 flex-none">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h7A1.5 1.5 0 0 1 19 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 9 18.5V17" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 12H5m0 0l3-3m-3 3l3 3" />
+                </svg>
+                Log in
+            </a>
+            <a href="/Register" class="flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold transition-colors">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 flex-none">
+                    <circle cx="9.5" cy="8" r="3.25" />
+                    <path stroke-linecap="round" d="M3.5 20c1-3.3 3.6-5.1 6-5.1s5 1.8 6 5.1" />
+                    <path stroke-linecap="round" d="M18.5 8v4.5M16.25 10.25h4.5" />
+                </svg>
+                Get started
+            </a>
         }
         <button id="themeToggle" type="button" aria-label="Toggle dark mode"
                 class="p-2 rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100 transition-colors">
@@ -81,11 +129,75 @@
 <footer class="text-center py-6 text-slate-500 dark:text-slate-400 text-xs sm:text-sm border-t border-slate-200 dark:border-slate-700">
     <span>PromptVCS — version control for prompts</span>
 </footer>
+
+<div id="toast-container" aria-live="polite" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm"></div>
+
 <script>
     document.getElementById('themeToggle').addEventListener('click', function () {
         var isDark = document.documentElement.classList.toggle('dark');
         localStorage.setItem('promptvcs-theme', isDark ? 'dark' : 'light');
     });
+</script>
+<script>
+    // Toasts are populated by _Toast.cshtml, included near the top of a
+    // page's body — since script tags run in document order, any
+    // window.__pendingToasts.push(...) calls from the page's own body
+    // have already run by the time this drains the queue.
+    (function () {
+        var ERROR_ICON = '<path stroke-linecap="round" d="M12 8v5M12 16h.01"></path>';
+        var SUCCESS_ICON = '<path stroke-linecap="round" stroke-linejoin="round" d="M8 12l3 3 5-6"></path>';
+
+        function showToast(type, message) {
+            var container = document.getElementById('toast-container');
+            if (!container) return;
+            var isError = type === 'error';
+
+            var toast = document.createElement('div');
+            toast.className = 'flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border text-sm transition-all duration-300 ease-out translate-x-[120%] opacity-0 ' +
+                (isError
+                    ? 'bg-white dark:bg-slate-800 border-red-500 text-red-600 dark:text-red-400'
+                    : 'bg-white dark:bg-slate-800 border-emerald-500 text-emerald-600 dark:text-emerald-400');
+
+            var icon = document.createElement('span');
+            icon.className = 'flex-none mt-0.5';
+            icon.setAttribute('aria-hidden', 'true');
+            // Static, trusted markup only (two fixed strings above) — never
+            // built from the message text, so this innerHTML use can't be
+            // an injection point.
+            icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5"><circle cx="12" cy="12" r="10"></circle>' + (isError ? ERROR_ICON : SUCCESS_ICON) + '</svg>';
+
+            var text = document.createElement('span');
+            text.className = 'flex-1 pt-0.5';
+            text.textContent = message; // textContent, never innerHTML — safe even if message contains markup-looking text
+
+            var closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.setAttribute('aria-label', 'Dismiss');
+            closeBtn.className = 'flex-none text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 transition-colors';
+            closeBtn.textContent = '×';
+
+            toast.appendChild(icon);
+            toast.appendChild(text);
+            toast.appendChild(closeBtn);
+            container.appendChild(toast);
+
+            requestAnimationFrame(function () {
+                toast.classList.remove('translate-x-[120%]', 'opacity-0');
+            });
+
+            var dismissed = false;
+            function dismiss() {
+                if (dismissed) return;
+                dismissed = true;
+                toast.classList.add('opacity-0');
+                setTimeout(function () { toast.remove(); }, 200);
+            }
+            closeBtn.addEventListener('click', dismiss);
+            setTimeout(dismiss, 6000);
+        }
+
+        (window.__pendingToasts || []).forEach(function (t) { showToast(t.type, t.message); });
+    })();
 </script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>

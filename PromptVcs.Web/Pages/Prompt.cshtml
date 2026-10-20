@@ -9,10 +9,7 @@
 <section class="max-w-3xl mx-auto px-6 py-12 sm:py-16">
     <a asp-page="/Dashboard" class="text-sm text-slate-500 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">&larr; All prompts</a>
 
-    @if (Model.ErrorMessage != null)
-    {
-        <div class="mt-4 px-4 py-3 rounded-lg border border-red-500 bg-red-500/10 text-red-600 dark:text-red-400 text-sm">@Model.ErrorMessage</div>
-    }
+    <partial name="_Toast" model="new ToastData(Model.ErrorMessage, null)" />
 
     @if (Model.Record != null)
     {

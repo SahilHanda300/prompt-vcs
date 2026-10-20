@@ -8,8 +8,6 @@ namespace PromptVcs.Web.Pages;
 
 public class RegisterModel : PageModel
 {
-    private const int MinPasswordLength = 8;
-
     private readonly ServerClient _client;
 
     public RegisterModel(ServerClient client)
@@ -34,11 +32,6 @@ public class RegisterModel : PageModel
         if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
         {
             ErrorMessage = "Username and password are required.";
-            return Page();
-        }
-        if (Password.Length < MinPasswordLength)
-        {
-            ErrorMessage = $"Password must be at least {MinPasswordLength} characters.";
             return Page();
         }
 

@@ -8,10 +8,7 @@
     <h1 class="text-2xl sm:text-3xl font-bold mb-2">Your prompts</h1>
     <p class="text-slate-500 dark:text-slate-400 mb-8">Every submission is checked and published automatically — no manual steps.</p>
 
-    @if (Model.ErrorMessage != null)
-    {
-        <div class="mb-6 px-4 py-3 rounded-lg border border-red-500 bg-red-500/10 text-red-600 dark:text-red-400 text-sm">@Model.ErrorMessage</div>
-    }
+    <partial name="_Toast" model="new ToastData(Model.ErrorMessage, null)" />
 
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 sm:p-6 mb-10">
         <h2 class="text-lg font-semibold mb-4">New prompt</h2>

@@ -4,9 +4,9 @@ namespace PromptVcs.McpServer.Services;
 
 /// <summary>
 /// One MongoDB connection, built once from PROMPTVCS_MONGO_URI, shared by
-/// MongoAuthService (users/sessions) and ServerStore (the prompt store
-/// itself) — avoids each standing up its own MongoClient against the same
-/// cluster.
+/// MongoUserRepository/MongoSessionRepository (users/sessions) and
+/// ServerStore (the prompt store itself) — avoids each standing up its own
+/// MongoClient against the same cluster.
 /// </summary>
 public class MongoDatabaseProvider
 {

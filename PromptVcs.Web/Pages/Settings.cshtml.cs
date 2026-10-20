@@ -34,8 +34,15 @@ public class SettingsModel : PageModel
     public string? SuccessMessage { get; set; }
     public string CurrentUsername => User.Identity?.Name ?? "";
 
-    public void OnGet()
+    public IActionResult OnGet()
     {
+        // Admins manage their own username/password from the Admin panel
+        // now (a "Your account" section there), not here — having the same
+        // two forms live in two places was the actual complaint, not just
+        // where they lived, so an admin landing here gets sent to the one
+        // place that still has them.
+        if (User.IsPromptVcsAdmin()) return RedirectToPage("/Admin");
+        return Page();
     }
 
     public async Task<IActionResult> OnPostChangeUsernameAsync()

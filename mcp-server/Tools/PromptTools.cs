@@ -24,12 +24,12 @@ public class PromptTools
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
-    private readonly ServerStore _store;
-    private readonly PromptService _promptService;
-    private readonly MongoAuthService _auth;
+    private readonly IServerStore _store;
+    private readonly IPromptService _promptService;
+    private readonly IAuthService _auth;
     private readonly string _siteDir;
 
-    public PromptTools(ServerStore store, PromptService promptService, MongoAuthService auth, IWebHostEnvironment env)
+    public PromptTools(IServerStore store, IPromptService promptService, IAuthService auth, IWebHostEnvironment env)
     {
         _store = store;
         _promptService = promptService;
@@ -106,7 +106,7 @@ public class PromptTools
         {
             await _store.MutateAsync<object?>(store =>
             {
-                PromptService.Delete(store, name, username!, isAdmin);
+                _promptService.Delete(store, name, username!, isAdmin);
                 return Task.FromResult<object?>(null);
             });
             // Best-effort — a missing directory (e.g. never had a successful
@@ -172,7 +172,7 @@ public class PromptTools
 
         return await _store.ReadAsync(store =>
         {
-            var items = PromptService.List(store, username!, isAdmin).Select(r => new
+            var items = _promptService.List(store, username!, isAdmin).Select(r => new
             {
                 name = r.Name,
                 owner = r.Owner,
@@ -202,7 +202,7 @@ public class PromptTools
         {
             return await _store.ReadAsync(store =>
             {
-                var (record, resolvedVersion, content) = PromptService.Show(store, name, username!, isAdmin, version);
+                var (record, resolvedVersion, content) = _promptService.Show(store, name, username!, isAdmin, version);
                 return Ok(new { record, version = resolvedVersion, content });
             });
         }
@@ -232,7 +232,7 @@ public class PromptTools
         {
             return await _store.ReadAsync(store =>
             {
-                var diffModel = PromptService.Diff(store, name, v1, v2, username!, isAdmin);
+                var diffModel = _promptService.Diff(store, name, v1, v2, username!, isAdmin);
                 var lines = diffModel.Lines.Select(l => new { type = l.Type.ToString().ToLowerInvariant(), text = l.Text ?? "" });
                 return Ok(lines);
             });

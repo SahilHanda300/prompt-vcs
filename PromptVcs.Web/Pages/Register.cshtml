@@ -8,10 +8,7 @@
     <h1 class="text-2xl font-bold mb-2 text-center">Create an account</h1>
     <p class="text-slate-500 dark:text-slate-400 text-sm text-center mb-8">Same account works in the CLI and browser terminal.</p>
 
-    @if (Model.ErrorMessage != null)
-    {
-        <div class="mb-5 px-4 py-3 rounded-lg border border-red-500 bg-red-500/10 text-red-600 dark:text-red-400 text-sm">@Model.ErrorMessage</div>
-    }
+    <partial name="_Toast" model="new ToastData(Model.ErrorMessage, null)" />
 
     <form method="post" class="flex flex-col gap-4">
         <div>
@@ -23,6 +20,7 @@
             <label for="Password" class="block text-sm font-medium mb-1.5">Password</label>
             <div class="relative">
                 <input type="password" id="Password" name="Password" autocomplete="new-password" minlength="8" required
+                       pattern="(?=.*[A-Za-z])(?=.*\d).{8,}" title="At least 8 characters, with letters and numbers"
                        class="w-full px-3 py-2.5 pr-11 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
                 <button type="button" id="togglePassword" aria-label="Show password"
                         class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100">
@@ -32,7 +30,7 @@
                     </svg>
                 </button>
             </div>
-            <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">At least 8 characters.</p>
+            <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">At least 8 characters, with letters and numbers.</p>
         </div>
         <button type="submit"
                 class="mt-2 px-6 py-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition-colors">

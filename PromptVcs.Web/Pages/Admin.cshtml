@@ -8,18 +8,52 @@
     <h1 class="text-2xl sm:text-3xl font-bold mb-2">Admin dashboard</h1>
     <p class="text-slate-500 dark:text-slate-400 mb-8">Signed in as <strong class="text-slate-800 dark:text-slate-100 font-semibold">@User.Identity!.Name</strong> (admin).</p>
 
-    @if (Model.ErrorMessage != null)
-    {
-        <div class="mb-6 px-4 py-3 rounded-lg border border-red-500 bg-red-500/10 text-red-600 dark:text-red-400 text-sm">@Model.ErrorMessage</div>
-    }
-    @if (Model.SuccessMessage != null)
-    {
-        <div class="mb-6 px-4 py-3 rounded-lg border border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm">@Model.SuccessMessage</div>
-    }
+    <partial name="_Toast" model="new ToastData(Model.ErrorMessage, Model.SuccessMessage)" />
+
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 sm:p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-1">Your account</h2>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Change your own username or password. Both require your current password — unlike editing another user below, this isn't an admin override.</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <form method="post" asp-page-handler="ChangeUsername" class="flex flex-col gap-3">
+                <div>
+                    <label for="NewUsername" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New username</label>
+                    <input type="text" id="NewUsername" name="NewUsername" value="@Model.NewUsername" autocomplete="username" required
+                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                </div>
+                <div>
+                    <label for="UsernamePassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Current password</label>
+                    <input type="password" id="UsernamePassword" name="UsernamePassword" autocomplete="current-password" required
+                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                </div>
+                <button type="submit" class="self-start px-4 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors">Save username</button>
+            </form>
+
+            <form method="post" asp-page-handler="ChangePassword" class="flex flex-col gap-3">
+                <div>
+                    <label for="CurrentPassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Current password</label>
+                    <input type="password" id="CurrentPassword" name="CurrentPassword" autocomplete="current-password" required
+                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                </div>
+                <div>
+                    <label for="NewPassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New password (8+ chars, letters and numbers)</label>
+                    <input type="password" id="NewPassword" name="NewPassword" autocomplete="new-password" minlength="8" required
+                           pattern="(?=.*[A-Za-z])(?=.*\d).{8,}" title="At least 8 characters, with letters and numbers"
+                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                </div>
+                <div>
+                    <label for="ConfirmNewPassword" class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Confirm new password</label>
+                    <input type="password" id="ConfirmNewPassword" name="ConfirmNewPassword" autocomplete="new-password" minlength="8" required
+                           class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                </div>
+                <button type="submit" class="self-start px-4 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors">Save password</button>
+            </form>
+        </div>
+    </div>
 
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 sm:p-6 mb-6">
         <h2 class="text-lg font-semibold mb-1">Users</h2>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Everyone registered on this server. Click a user to edit their username, password, or role.</p>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Everyone registered on this server. Click a user to edit their username, password, or role — no password confirmation needed, this is an admin override.</p>
 
         @if (Model.Users.Count == 0)
         {
@@ -30,64 +64,70 @@
             <div class="flex flex-col divide-y divide-slate-200 dark:divide-slate-700 mb-5">
                 @foreach (var u in Model.Users)
                 {
-                    <details class="group py-2.5">
-                        <summary class="flex items-center justify-between text-sm cursor-pointer list-none">
-                            <span class="flex items-center gap-2">
-                                <span>@u.Username</span>
-                                @if (u.Username == User.Identity!.Name)
-                                {
-                                    <span class="text-xs text-slate-400 dark:text-slate-500">(you)</span>
-                                }
-                            </span>
-                            <span class="flex items-center gap-3">
-                                @if (u.IsAdmin)
-                                {
-                                    <span class="text-xs font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400 border border-cyan-500 dark:border-cyan-400 rounded-full px-2.5 py-0.5">admin</span>
-                                }
-                                else
-                                {
-                                    <span class="text-xs text-slate-500 dark:text-slate-400">user</span>
-                                }
-                                <span class="text-slate-400 dark:text-slate-500 text-xs group-open:rotate-180 transition-transform">&#9662;</span>
-                            </span>
-                        </summary>
+                    var isSelf = u.Username == User.Identity!.Name;
+                    <div class="@(isSelf ? "" : "group") py-3">
+                        @if (isSelf)
+                        {
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="flex items-center gap-2">
+                                    <span>@u.Username</span>
+                                    <span class="text-xs text-slate-400 dark:text-slate-500">(you — managed above, under "Your account")</span>
+                                </span>
+                                <span class="text-xs font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400 border border-cyan-500 dark:border-cyan-400 rounded-full px-2.5 py-0.5">admin</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <details class="group/row">
+                                <summary class="flex items-center justify-between text-sm cursor-pointer list-none">
+                                    <span>@u.Username</span>
+                                    <span class="flex items-center gap-3">
+                                        @if (u.IsAdmin)
+                                        {
+                                            <span class="text-xs font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-400 border border-cyan-500 dark:border-cyan-400 rounded-full px-2.5 py-0.5">admin</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-xs text-slate-500 dark:text-slate-400">user</span>
+                                        }
+                                        <span class="text-slate-400 dark:text-slate-500 text-xs group-open/row:rotate-180 transition-transform">&#9662;</span>
+                                    </span>
+                                </summary>
 
-                        <div class="mt-3 pl-1 flex flex-col gap-4">
-                            <form method="post" asp-page-handler="UpdateUser" class="flex flex-col gap-3">
-                                <input type="hidden" name="targetUsername" value="@u.Username" />
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div>
-                                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New username</label>
-                                        <input type="text" name="editUsername" placeholder="(unchanged)"
-                                               class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New password</label>
-                                        <input type="password" name="editPassword" placeholder="(unchanged)" minlength="8"
-                                               class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Role</label>
-                                        <select name="editRole" class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm">
-                                            <option value="">(unchanged)</option>
-                                            <option value="true">Admin</option>
-                                            <option value="false">User</option>
-                                        </select>
-                                    </div>
+                                <div class="mt-3 p-4 rounded-lg bg-stone-50 dark:bg-slate-900/60 flex flex-col gap-4">
+                                    <form method="post" asp-page-handler="UpdateUser" class="flex flex-col gap-4">
+                                        <input type="hidden" name="targetUsername" value="@u.Username" />
+                                        <div>
+                                            <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New username</label>
+                                            <input type="text" name="editUsername" placeholder="(unchanged)"
+                                                   class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">New password (8+ chars, letters and numbers)</label>
+                                            <input type="password" name="editPassword" placeholder="(unchanged)" minlength="8"
+                                                   pattern="(?=.*[A-Za-z])(?=.*\d).{8,}" title="At least 8 characters, with letters and numbers"
+                                                   class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Role</label>
+                                            <select name="editRole" class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm">
+                                                <option value="">(unchanged)</option>
+                                                <option value="true">Admin</option>
+                                                <option value="false">User</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="self-start px-4 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors">Save changes</button>
+                                    </form>
+
+                                    <form method="post" asp-page-handler="DeleteUser" class="pt-2 border-t border-slate-200 dark:border-slate-700"
+                                          onsubmit="return confirm('Delete user \'@u.Username\'? This cannot be undone. Their prompts are kept (still manageable from the Prompts section below), only the account is removed.');">
+                                        <input type="hidden" name="targetUsername" value="@u.Username" />
+                                        <button type="submit" class="mt-2 px-4 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors">Delete user</button>
+                                    </form>
                                 </div>
-                                <button type="submit" class="self-start px-4 py-1.5 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs transition-colors">Save changes</button>
-                            </form>
-
-                            @if (u.Username != User.Identity!.Name)
-                            {
-                                <form method="post" asp-page-handler="DeleteUser"
-                                      onsubmit="return confirm('Delete user \'@u.Username\'? This cannot be undone. Their prompts are kept (still manageable from the Prompts section below), only the account is removed.');">
-                                    <input type="hidden" name="targetUsername" value="@u.Username" />
-                                    <button type="submit" class="px-4 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors">Delete user</button>
-                                </form>
-                            }
-                        </div>
-                    </details>
+                            </details>
+                        }
+                    </div>
                 }
             </div>
         }
@@ -102,8 +142,9 @@
                                class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
                     </div>
                     <div>
-                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Password</label>
+                        <label class="block text-xs font-medium mb-1 text-slate-500 dark:text-slate-400">Password (8+ chars, letters and numbers)</label>
                         <input type="password" name="NewUserPassword" required minlength="8"
+                               pattern="(?=.*[A-Za-z])(?=.*\d).{8,}" title="At least 8 characters, with letters and numbers"
                                class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-stone-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400" />
                     </div>
                 </div>
@@ -118,7 +159,7 @@
 
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 sm:p-6 mb-6">
         <h2 class="text-lg font-semibold mb-1">Prompts</h2>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Every prompt on this server, from every user.</p>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Every prompt on this server, grouped by owner. Click a user to see theirs.</p>
 
         @if (Model.Prompts.Count == 0)
         {
@@ -126,20 +167,35 @@
         }
         else
         {
+            var promptsByOwner = Model.Prompts
+                .GroupBy(p => p.Owner ?? "(legacy, no owner)")
+                .OrderBy(g => g.Key, StringComparer.Ordinal);
             <div class="flex flex-col divide-y divide-slate-200 dark:divide-slate-700">
-                @foreach (var p in Model.Prompts)
+                @foreach (var ownerGroup in promptsByOwner)
                 {
-                    <div class="flex items-center justify-between gap-3 py-2.5 text-sm">
-                        <div class="min-w-0">
-                            <a asp-page="/Prompt" asp-route-name="@p.Name" class="font-medium hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors truncate">@p.Name</a>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">owner: @(p.Owner ?? "(legacy, no owner)")</p>
+                    <details class="group/owner py-2.5">
+                        <summary class="flex items-center justify-between text-sm cursor-pointer list-none">
+                            <span>@ownerGroup.Key</span>
+                            <span class="flex items-center gap-3">
+                                <span class="text-xs text-slate-500 dark:text-slate-400">@ownerGroup.Count() prompt@(ownerGroup.Count() == 1 ? "" : "s")</span>
+                                <span class="text-slate-400 dark:text-slate-500 text-xs group-open/owner:rotate-180 transition-transform">&#9662;</span>
+                            </span>
+                        </summary>
+
+                        <div class="mt-3 pl-1 flex flex-col divide-y divide-slate-200 dark:divide-slate-700">
+                            @foreach (var p in ownerGroup)
+                            {
+                                <div class="flex items-center justify-between gap-3 py-2.5 text-sm">
+                                    <a asp-page="/Prompt" asp-route-name="@p.Name" class="font-medium hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors truncate min-w-0">@p.Name</a>
+                                    <form method="post" asp-page-handler="DeletePrompt"
+                                          onsubmit="return confirm('Delete prompt \'@p.Name\'? This cannot be undone.');">
+                                        <input type="hidden" name="name" value="@p.Name" />
+                                        <button type="submit" class="flex-none px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors">Delete</button>
+                                    </form>
+                                </div>
+                            }
                         </div>
-                        <form method="post" asp-page-handler="DeletePrompt"
-                              onsubmit="return confirm('Delete prompt \'@p.Name\'? This cannot be undone.');">
-                            <input type="hidden" name="name" value="@p.Name" />
-                            <button type="submit" class="flex-none px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors">Delete</button>
-                        </form>
-                    </div>
+                    </details>
                 }
             </div>
         }

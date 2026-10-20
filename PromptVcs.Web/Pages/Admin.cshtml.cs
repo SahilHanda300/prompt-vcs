@@ -1,3 +1,6 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -26,6 +29,28 @@ public class AdminModel : PageModel
     [BindProperty]
     public bool NewUserIsAdmin { get; set; }
 
+    // "Your account" — the admin's own username/password change, moved here
+    // from /Settings (which admins no longer use) so there's exactly one
+    // place, with exactly one security model (current-password
+    // reverification), for an admin to change their own credentials. The
+    // per-row edit form further down is for managing OTHER users and
+    // deliberately has no such requirement — that's an admin override, not
+    // a self-service account change.
+    [BindProperty]
+    public string NewUsername { get; set; } = "";
+
+    [BindProperty]
+    public string UsernamePassword { get; set; } = "";
+
+    [BindProperty]
+    public string CurrentPassword { get; set; } = "";
+
+    [BindProperty]
+    public string NewPassword { get; set; } = "";
+
+    [BindProperty]
+    public string ConfirmNewPassword { get; set; } = "";
+
     public async Task<IActionResult> OnGetAsync()
     {
         var token = User.GetSessionToken();
@@ -35,6 +60,73 @@ public class AdminModel : PageModel
         // dashboard, not an error page or an empty admin view.
         if (!User.IsPromptVcsAdmin()) return RedirectToPage("/Dashboard");
 
+        await LoadAsync(token);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostChangeUsernameAsync()
+    {
+        var (tokenOrNull, redirect) = RequireAdmin();
+        if (redirect != null) return redirect;
+        var token = tokenOrNull!;
+
+        if (string.IsNullOrWhiteSpace(NewUsername) || string.IsNullOrWhiteSpace(UsernamePassword))
+        {
+            ErrorMessage = "New username and your current password are both required.";
+            await LoadAsync(token);
+            return Page();
+        }
+
+        try
+        {
+            var result = await _client.ChangeUsernameAsync(UsernamePassword, NewUsername.Trim(), token);
+            // Re-issue the cookie with the new name — otherwise the page
+            // (and the rest of the app) would keep showing the old
+            // username until the cookie's natural 30-day expiry.
+            await SignInAsync(result.Username, token, isAdmin: true);
+            SuccessMessage = $"Username changed to \"{result.Username}\".";
+            NewUsername = "";
+            UsernamePassword = "";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        await LoadAsync(token);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostChangePasswordAsync()
+    {
+        var (tokenOrNull, redirect) = RequireAdmin();
+        if (redirect != null) return redirect;
+        var token = tokenOrNull!;
+
+        if (string.IsNullOrWhiteSpace(CurrentPassword) || string.IsNullOrWhiteSpace(NewPassword))
+        {
+            ErrorMessage = "Current and new password are both required.";
+            await LoadAsync(token);
+            return Page();
+        }
+        if (NewPassword != ConfirmNewPassword)
+        {
+            ErrorMessage = "New password and confirmation don't match.";
+            await LoadAsync(token);
+            return Page();
+        }
+
+        try
+        {
+            await _client.ChangePasswordAsync(CurrentPassword, NewPassword, token);
+            SuccessMessage = "Password changed.";
+            CurrentPassword = "";
+            NewPassword = "";
+            ConfirmNewPassword = "";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
         await LoadAsync(token);
         return Page();
     }
@@ -174,6 +266,17 @@ public class AdminModel : PageModel
         if (token == null) return (null, RedirectToPage("/Login"));
         if (!User.IsPromptVcsAdmin()) return (null, RedirectToPage("/Dashboard"));
         return (token, null);
+    }
+
+    private async Task SignInAsync(string username, string sessionToken, bool isAdmin)
+    {
+        var identity = new ClaimsIdentity(
+            ClaimsPrincipalExtensions.BuildClaims(username, sessionToken, isAdmin),
+            CookieAuthenticationDefaults.AuthenticationScheme);
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(identity),
+            new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30) });
     }
 
     private async Task LoadAsync(string token)

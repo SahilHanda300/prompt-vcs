@@ -1,58 +1,48 @@
 using System.Security.Cryptography;
-using MongoDB.Driver;
 
 namespace PromptVcs.McpServer.Services;
 
 /// <summary>
-/// CLI-facing login now goes through MongoDB-backed accounts instead of the
-/// shared PROMPTVCS_API_TOKEN — a "users" collection (username, hashed
-/// password, isAdmin) and a "sessions" collection (opaque token -> username,
-/// expiry). Kept deliberately simple: no JWT, no third-party hashing
-/// package — PBKDF2 via the framework's own Rfc2898DeriveBytes, and a
-/// session is just a random token stored server-side, revocable by deleting
-/// its document. Registration is open to anyone — the very first user ever
-/// registered becomes admin automatically; everyone after that registers as
-/// a normal (non-admin) user, no invitation or approval needed.
+/// Registration is open to anyone — the very first user ever registered
+/// becomes admin automatically; everyone after that registers as a normal
+/// (non-admin) user, no invitation or approval needed.
 /// </summary>
-public class MongoAuthService
+public class AuthService : IAuthService
 {
-    private const int Pbkdf2Iterations = 100_000;
-    private const int SaltSizeBytes = 16;
-    private const int HashSizeBytes = 32;
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(30);
 
-    private readonly IMongoCollection<UserDocument>? _users;
-    private readonly IMongoCollection<SessionDocument>? _sessions;
+    private readonly IUserRepository _users;
+    private readonly ISessionRepository _sessions;
+    private readonly IPasswordHasher _hasher;
+    private readonly IPasswordPolicy _passwordPolicy;
 
-    public bool IsConfigured => _users != null;
-
-    public MongoAuthService(MongoDatabaseProvider provider)
+    public AuthService(IUserRepository users, ISessionRepository sessions, IPasswordHasher hasher, IPasswordPolicy passwordPolicy)
     {
-        if (provider.Database == null) return;
-        _users = provider.Database.GetCollection<UserDocument>("users");
-        _sessions = provider.Database.GetCollection<SessionDocument>("sessions");
+        _users = users;
+        _sessions = sessions;
+        _hasher = hasher;
+        _passwordPolicy = passwordPolicy;
     }
 
-    public async Task<bool> HasAnyUsersAsync() =>
-        await RequireUsers().Find(FilterDefinition<UserDocument>.Empty).AnyAsync();
+    public bool IsConfigured => _users.IsConfigured;
 
     /// Admin-only (caller enforces — see AuthTools.ListUsers). Just
     /// username + role, never the password hash.
     public async Task<List<(string Username, bool IsAdmin)>> ListUsersAsync()
     {
-        var users = await RequireUsers().Find(FilterDefinition<UserDocument>.Empty)
-            .SortBy(u => u.Username)
-            .ToListAsync();
+        var users = await _users.ListAllAsync();
         return users.Select(u => (u.Username, u.IsAdmin)).ToList();
     }
 
     public async Task<(bool Success, string? Message, string? SessionToken, bool IsAdmin)> RegisterAsync(
         string username, string password)
     {
-        var users = RequireUsers();
-        var isFirstUser = !await HasAnyUsersAsync();
+        var passwordError = _passwordPolicy.Validate(password);
+        if (passwordError != null) return (false, passwordError, null, false);
 
-        var existing = await users.Find(u => u.Username == username).FirstOrDefaultAsync();
+        var isFirstUser = !await _users.AnyAsync();
+
+        var existing = await _users.FindByUsernameAsync(username);
         if (existing != null)
         {
             return (false, $"Username \"{username}\" is already taken.", null, false);
@@ -61,10 +51,10 @@ public class MongoAuthService
         var user = new UserDocument
         {
             Username = username,
-            PasswordHash = HashPassword(password),
+            PasswordHash = _hasher.Hash(password),
             IsAdmin = isFirstUser,
         };
-        await users.InsertOneAsync(user);
+        await _users.InsertAsync(user);
 
         var sessionToken = await CreateSessionAsync(username, user.IsAdmin);
         return (true, null, sessionToken, user.IsAdmin);
@@ -72,8 +62,8 @@ public class MongoAuthService
 
     public async Task<(bool Success, string? Message, string? SessionToken, bool IsAdmin)> LoginAsync(string username, string password)
     {
-        var user = await RequireUsers().Find(u => u.Username == username).FirstOrDefaultAsync();
-        if (user == null || !VerifyPassword(password, user.PasswordHash))
+        var user = await _users.FindByUsernameAsync(username);
+        if (user == null || !_hasher.Verify(password, user.PasswordHash))
         {
             return (false, "Invalid username or password.", null, false);
         }
@@ -91,22 +81,22 @@ public class MongoAuthService
         var (valid, username, _) = await ValidateSessionAsync(sessionToken);
         if (!valid) return (false, "Not logged in. Run \"login\" first.");
 
-        var users = RequireUsers();
-        var user = await users.Find(u => u.Username == username).FirstOrDefaultAsync();
+        var user = await _users.FindByUsernameAsync(username!);
         if (user == null) return (false, "User not found.");
-        if (!VerifyPassword(currentPassword, user.PasswordHash)) return (false, "Current password is incorrect.");
-        if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 8) return (false, "New password must be at least 8 characters.");
+        if (!_hasher.Verify(currentPassword, user.PasswordHash)) return (false, "Current password is incorrect.");
+        var passwordError = _passwordPolicy.Validate(newPassword);
+        if (passwordError != null) return (false, passwordError);
 
-        await users.UpdateOneAsync(u => u.Username == username, Builders<UserDocument>.Update.Set(u => u.PasswordHash, HashPassword(newPassword)));
+        await _users.SetPasswordHashAsync(username!, _hasher.Hash(newPassword));
         return (true, null);
     }
 
     /// Same current-password reverification as ChangePasswordAsync. Keeps
     /// the caller's own session alive under the new username afterward
-    /// (updates that one SessionDocument's Username field) rather than
-    /// forcing an immediate re-login right after a successful rename —
-    /// other devices' sessions, if any, go stale until they next log in,
-    /// an accepted tradeoff for not needing a bulk session update here.
+    /// rather than forcing an immediate re-login right after a successful
+    /// rename — other devices' sessions, if any, go stale until they next
+    /// log in, an accepted tradeoff for not needing a bulk session update
+    /// here (see AdminUpdateUserAsync, which does need one).
     public async Task<(bool Success, string? Message, string? NewUsername)> ChangeUsernameAsync(
         string? sessionToken, string currentPassword, string newUsername)
     {
@@ -117,16 +107,15 @@ public class MongoAuthService
         if (string.IsNullOrEmpty(newUsername)) return (false, "New username is required.", null);
         if (newUsername == username) return (false, "That's already your username.", null);
 
-        var users = RequireUsers();
-        var user = await users.Find(u => u.Username == username).FirstOrDefaultAsync();
+        var user = await _users.FindByUsernameAsync(username!);
         if (user == null) return (false, "User not found.", null);
-        if (!VerifyPassword(currentPassword, user.PasswordHash)) return (false, "Current password is incorrect.", null);
+        if (!_hasher.Verify(currentPassword, user.PasswordHash)) return (false, "Current password is incorrect.", null);
 
-        var existing = await users.Find(u => u.Username == newUsername).FirstOrDefaultAsync();
+        var existing = await _users.FindByUsernameAsync(newUsername);
         if (existing != null) return (false, $"Username \"{newUsername}\" is already taken.", null);
 
-        await users.UpdateOneAsync(u => u.Username == username, Builders<UserDocument>.Update.Set(u => u.Username, newUsername));
-        await RequireSessions().UpdateOneAsync(s => s.Token == sessionToken, Builders<SessionDocument>.Update.Set(s => s.Username, newUsername));
+        await _users.SetUsernameAsync(username!, newUsername);
+        await _sessions.UpdateUsernameForTokenAsync(sessionToken!, newUsername);
 
         return (true, null, newUsername);
     }
@@ -139,13 +128,13 @@ public class MongoAuthService
     {
         username = username.Trim();
         if (string.IsNullOrEmpty(username)) return (false, "Username is required.");
-        if (string.IsNullOrEmpty(password) || password.Length < 8) return (false, "Password must be at least 8 characters.");
+        var passwordError = _passwordPolicy.Validate(password);
+        if (passwordError != null) return (false, passwordError);
 
-        var users = RequireUsers();
-        var existing = await users.Find(u => u.Username == username).FirstOrDefaultAsync();
+        var existing = await _users.FindByUsernameAsync(username);
         if (existing != null) return (false, $"Username \"{username}\" is already taken.");
 
-        await users.InsertOneAsync(new UserDocument { Username = username, PasswordHash = HashPassword(password), IsAdmin = isAdmin });
+        await _users.InsertAsync(new UserDocument { Username = username, PasswordHash = _hasher.Hash(password), IsAdmin = isAdmin });
         return (true, null);
     }
 
@@ -156,8 +145,7 @@ public class MongoAuthService
     public async Task<(bool Success, string? Message, string? RenamedFrom, string? RenamedTo)> AdminUpdateUserAsync(
         string targetUsername, string? newUsername, string? newPassword, bool? newIsAdmin)
     {
-        var users = RequireUsers();
-        var user = await users.Find(u => u.Username == targetUsername).FirstOrDefaultAsync();
+        var user = await _users.FindByUsernameAsync(targetUsername);
         if (user == null) return (false, $"User \"{targetUsername}\" not found.", null, null);
 
         newUsername = string.IsNullOrWhiteSpace(newUsername) ? null : newUsername.Trim();
@@ -165,29 +153,31 @@ public class MongoAuthService
 
         if (newIsAdmin == false && user.IsAdmin)
         {
-            var adminCount = await users.CountDocumentsAsync(u => u.IsAdmin);
+            var adminCount = await _users.CountAdminsAsync();
             if (adminCount <= 1) return (false, "Can't remove admin from the last remaining admin.", null, null);
         }
 
-        var updates = new List<UpdateDefinition<UserDocument>>();
+        if (newUsername == null && string.IsNullOrEmpty(newPassword) && !newIsAdmin.HasValue)
+        {
+            return (false, "Nothing to update.", null, null);
+        }
+
         if (newUsername != null)
         {
-            var existing = await users.Find(u => u.Username == newUsername).FirstOrDefaultAsync();
+            var existing = await _users.FindByUsernameAsync(newUsername);
             if (existing != null) return (false, $"Username \"{newUsername}\" is already taken.", null, null);
-            updates.Add(Builders<UserDocument>.Update.Set(u => u.Username, newUsername));
+            await _users.SetUsernameAsync(targetUsername, newUsername);
         }
         if (!string.IsNullOrEmpty(newPassword))
         {
-            if (newPassword.Length < 8) return (false, "New password must be at least 8 characters.", null, null);
-            updates.Add(Builders<UserDocument>.Update.Set(u => u.PasswordHash, HashPassword(newPassword)));
+            var passwordError = _passwordPolicy.Validate(newPassword);
+            if (passwordError != null) return (false, passwordError, null, null);
+            await _users.SetPasswordHashAsync(newUsername ?? targetUsername, _hasher.Hash(newPassword));
         }
         if (newIsAdmin.HasValue)
         {
-            updates.Add(Builders<UserDocument>.Update.Set(u => u.IsAdmin, newIsAdmin.Value));
+            await _users.SetIsAdminAsync(newUsername ?? targetUsername, newIsAdmin.Value);
         }
-        if (updates.Count == 0) return (false, "Nothing to update.", null, null);
-
-        await users.UpdateOneAsync(u => u.Username == targetUsername, Builders<UserDocument>.Update.Combine(updates));
 
         // Every session for this user, not just one — an admin renaming/
         // re-roling someone else might be changing a user logged in on
@@ -195,11 +185,11 @@ public class MongoAuthService
         // has its own current session to worry about).
         if (newUsername != null)
         {
-            await RequireSessions().UpdateManyAsync(s => s.Username == targetUsername, Builders<SessionDocument>.Update.Set(s => s.Username, newUsername));
+            await _sessions.UpdateUsernameForAllAsync(targetUsername, newUsername);
         }
         if (newIsAdmin.HasValue)
         {
-            await RequireSessions().UpdateManyAsync(s => s.Username == (newUsername ?? targetUsername), Builders<SessionDocument>.Update.Set(s => s.IsAdmin, newIsAdmin.Value));
+            await _sessions.UpdateIsAdminForAllAsync(newUsername ?? targetUsername, newIsAdmin.Value);
         }
 
         return (true, null, targetUsername, newUsername);
@@ -213,37 +203,36 @@ public class MongoAuthService
     {
         if (targetUsername == callerUsername) return (false, "Can't delete your own account while logged in as it.");
 
-        var users = RequireUsers();
-        var user = await users.Find(u => u.Username == targetUsername).FirstOrDefaultAsync();
+        var user = await _users.FindByUsernameAsync(targetUsername);
         if (user == null) return (false, $"User \"{targetUsername}\" not found.");
 
         if (user.IsAdmin)
         {
-            var adminCount = await users.CountDocumentsAsync(u => u.IsAdmin);
+            var adminCount = await _users.CountAdminsAsync();
             if (adminCount <= 1) return (false, "Can't delete the last remaining admin.");
         }
 
-        await users.DeleteOneAsync(u => u.Username == targetUsername);
-        await RequireSessions().DeleteManyAsync(s => s.Username == targetUsername);
+        await _users.DeleteAsync(targetUsername);
+        await _sessions.DeleteAllForUsernameAsync(targetUsername);
         return (true, null);
     }
 
     public async Task LogoutAsync(string? sessionToken)
     {
         if (string.IsNullOrEmpty(sessionToken)) return;
-        await RequireSessions().DeleteOneAsync(s => s.Token == sessionToken);
+        await _sessions.DeleteByTokenAsync(sessionToken);
     }
 
     public async Task<(bool Valid, string? Username, bool IsAdmin)> ValidateSessionAsync(string? sessionToken)
     {
         if (string.IsNullOrEmpty(sessionToken)) return (false, null, false);
 
-        var session = await RequireSessions().Find(s => s.Token == sessionToken).FirstOrDefaultAsync();
+        var session = await _sessions.FindByTokenAsync(sessionToken);
         if (session == null) return (false, null, false);
 
         if (session.ExpiresAtUtc <= DateTime.UtcNow)
         {
-            await RequireSessions().DeleteOneAsync(s => s.Token == sessionToken);
+            await _sessions.DeleteByTokenAsync(sessionToken);
             return (false, null, false);
         }
 
@@ -261,31 +250,7 @@ public class MongoAuthService
             IsAdmin = isAdmin,
             ExpiresAtUtc = DateTime.UtcNow.Add(SessionLifetime),
         };
-        await RequireSessions().InsertOneAsync(session);
+        await _sessions.InsertAsync(session);
         return token;
-    }
-
-    private IMongoCollection<UserDocument> RequireUsers() =>
-        _users ?? throw new InvalidOperationException("PROMPTVCS_MONGO_URI is not configured on the server.");
-
-    private IMongoCollection<SessionDocument> RequireSessions() =>
-        _sessions ?? throw new InvalidOperationException("PROMPTVCS_MONGO_URI is not configured on the server.");
-
-    private static string HashPassword(string password)
-    {
-        var salt = RandomNumberGenerator.GetBytes(SaltSizeBytes);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, HashSizeBytes);
-        return $"{Pbkdf2Iterations}.{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
-    }
-
-    private static bool VerifyPassword(string password, string stored)
-    {
-        var parts = stored.Split('.');
-        if (parts.Length != 3 || !int.TryParse(parts[0], out var iterations)) return false;
-
-        var salt = Convert.FromBase64String(parts[1]);
-        var expectedHash = Convert.FromBase64String(parts[2]);
-        var actualHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, expectedHash.Length);
-        return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
     }
 }

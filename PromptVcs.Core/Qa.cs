@@ -1,22 +1,21 @@
-using System.Diagnostics;
 using System.Text.Json;
 
 namespace PromptVcs.Core;
 
-public class Qa
+public class Qa : IQaService
 {
-    private const int MaxPromptLength = 20_000;
-
     private readonly IClaudeCodeInvoker _invoker;
+    private readonly IPromptValidator _validator;
 
-    public Qa(IClaudeCodeInvoker invoker)
+    public Qa(IClaudeCodeInvoker invoker, IPromptValidator validator)
     {
         _invoker = invoker;
+        _validator = validator;
     }
 
     public async Task<QaCheckpoint> RunAsync(int version, string content)
     {
-        var validation = RunValidation(content);
+        var validation = _validator.Validate(content);
 
         // No point spending a Claude Code call on a prompt that already
         // failed local validation. Content safety and feasibility are
@@ -36,25 +35,6 @@ public class Qa
             DateTimeOffset.UtcNow,
             passed,
             new QaChecks(validation, contentSafety, trialGeneration));
-    }
-
-    /// Public so Pipeline can validate standalone on the first-run path,
-    /// where safety/feasibility come from PublishRules.ScreenAndPublishFirstRunAsync
-    /// instead of RunAsync's own combined call — calling RunAsync there would
-    /// mean a redundant extra Claude Code call before the combined one.
-    public static QaCheckResult RunValidation(string content)
-    {
-        var sw = Stopwatch.StartNew();
-        var trimmed = content.Trim();
-        if (trimmed.Length == 0)
-        {
-            return new QaCheckResult(false, "Prompt is empty or whitespace-only.", sw.ElapsedMilliseconds);
-        }
-        if (trimmed.Length > MaxPromptLength)
-        {
-            return new QaCheckResult(false, $"Prompt exceeds {MaxPromptLength} character limit (got {trimmed.Length}).", sw.ElapsedMilliseconds);
-        }
-        return new QaCheckResult(true, null, sw.ElapsedMilliseconds);
     }
 
     private async Task<(QaCheckResult ContentSafety, QaCheckResult TrialGeneration)> RunSafetyAndFeasibilityAsync(string content)

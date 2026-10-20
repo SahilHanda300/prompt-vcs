@@ -17,7 +17,7 @@ namespace PromptVcs.McpServer.Services;
 /// one — see "Multi-instance scaling" in CLAUDE.md for the limitation that
 /// still carries forward unchanged.
 /// </summary>
-public class ServerStore
+public class ServerStore : IServerStore
 {
     private const string DocumentId = "singleton";
 

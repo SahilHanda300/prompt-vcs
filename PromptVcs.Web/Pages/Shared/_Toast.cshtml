@@ -1,0 +1,22 @@
+@model PromptVcs.Web.ToastData
+@*
+    Hands a page's error/success message to _Layout's toast script instead
+    of rendering it as a plain static div. Queues onto window.__pendingToasts
+    (an array, since a page could in principle set both); the queue-drain
+    script at the bottom of _Layout runs after this, so ordering is safe
+    regardless of where on the page this partial is placed. The message
+    text itself is never put in the script via innerHTML/raw string
+    concatenation — it's JSON-serialized (System.Text.Json's default
+    encoder already escapes '<', '>', '&' etc., so a message containing
+    something like "</script>" can't break out of this script block) and
+    then only ever assigned via a DOM node's textContent in JS, never
+    innerHTML, so nothing in the message string can inject markup.
+*@
+@if (Model.Error != null)
+{
+    <script>(window.__pendingToasts = window.__pendingToasts || []).push({ type: 'error', message: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Error)) });</script>
+}
+@if (Model.Success != null)
+{
+    <script>(window.__pendingToasts = window.__pendingToasts || []).push({ type: 'success', message: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Success)) });</script>
+}

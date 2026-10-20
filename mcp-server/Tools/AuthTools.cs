@@ -19,13 +19,15 @@ public class AuthTools
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
-    private readonly MongoAuthService _auth;
-    private readonly ServerStore _store;
+    private readonly IAuthService _auth;
+    private readonly IServerStore _store;
+    private readonly IPromptService _promptService;
 
-    public AuthTools(MongoAuthService auth, ServerStore store)
+    public AuthTools(IAuthService auth, IServerStore store, IPromptService promptService)
     {
         _auth = auth;
         _store = store;
+        _promptService = promptService;
     }
 
     /// Every prompt owned by oldUsername now belongs to newUsername instead
@@ -38,7 +40,7 @@ public class AuthTools
         if (oldUsername == null || newUsername == null || oldUsername == newUsername) return Task.CompletedTask;
         return _store.MutateAsync<object?>(store =>
         {
-            PromptService.RenameOwner(store, oldUsername, newUsername);
+            _promptService.RenameOwner(store, oldUsername, newUsername);
             return Task.FromResult<object?>(null);
         });
     }

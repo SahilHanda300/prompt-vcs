@@ -15,7 +15,7 @@ public record SanitizeResult(bool Ok, string Html, string? Detail);
 /// Windows-1252) instead of UTF-8, turning multi-byte characters like × ÷ √
 /// into mojibake even though the file on disk is valid UTF-8.
 /// </summary>
-public static class ArtifactSanitizer
+public class ArtifactSanitizer : IArtifactSanitizer
 {
     private static readonly Regex CodeFence = new(@"^```(?:html)?\s*\n([\s\S]*?)\n```\s*$", RegexOptions.Multiline);
     private static readonly Regex CharsetMeta = new(@"<meta[^>]*charset\s*=", RegexOptions.IgnoreCase);
@@ -124,7 +124,7 @@ public static class ArtifactSanitizer
         return targets.Where(t => !existingIds.Contains(t)).ToList();
     }
 
-    public static SanitizeResult Sanitize(string raw)
+    public SanitizeResult Sanitize(string raw)
     {
         var text = raw.Trim();
 

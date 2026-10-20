@@ -33,17 +33,31 @@ builder.Services.AddSignalR(options =>
 });
 
 builder.Services.AddSingleton<MongoDatabaseProvider>();
-builder.Services.AddSingleton<ServerStore>();
+builder.Services.AddSingleton<IServerStore, ServerStore>();
 builder.Services.AddSingleton<RunnerRegistry>();
 builder.Services.AddSingleton<RunnerDispatchInvoker>();
 builder.Services.AddSingleton<IClaudeCodeInvoker>(sp => sp.GetRequiredService<RunnerDispatchInvoker>());
-builder.Services.AddSingleton<Qa>();
-builder.Services.AddSingleton(sp => new PublishRules(
-    sp.GetRequiredService<IClaudeCodeInvoker>(),
-    Path.Combine(builder.Environment.ContentRootPath, "site")));
-builder.Services.AddSingleton<Pipeline>();
-builder.Services.AddSingleton<PromptService>();
-builder.Services.AddSingleton<MongoAuthService>();
+
+// Core pipeline — each stage depends only on the abstractions it needs
+// (IClaudeCodeInvoker, IPromptValidator, IGenerationPromptBuilder,
+// IArtifactSanitizer, IArtifactWriter), not on each other's concrete types.
+builder.Services.AddSingleton<IPromptValidator, PromptValidator>();
+builder.Services.AddSingleton<IGenerationPromptBuilder, GenerationPromptBuilder>();
+builder.Services.AddSingleton<IArtifactSanitizer, ArtifactSanitizer>();
+builder.Services.AddSingleton<IArtifactWriter>(_ => new ArtifactWriter(Path.Combine(builder.Environment.ContentRootPath, "site")));
+builder.Services.AddSingleton<IQaService, Qa>();
+builder.Services.AddSingleton<IPublishService, PublishRules>();
+builder.Services.AddSingleton<IPipelineService, Pipeline>();
+builder.Services.AddSingleton<IPromptService, PromptService>();
+
+// Auth — AuthService composes these four single-purpose collaborators
+// instead of doing hashing + password-policy + user storage + session
+// storage all in one class.
+builder.Services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+builder.Services.AddSingleton<IPasswordPolicy, PasswordPolicy>();
+builder.Services.AddSingleton<IUserRepository, MongoUserRepository>();
+builder.Services.AddSingleton<ISessionRepository, MongoSessionRepository>();
+builder.Services.AddSingleton<IAuthService, AuthService>();
 
 var cliDllPath = Environment.GetEnvironmentVariable("PROMPTVCS_CLI_PATH") ?? "/app/cli/prompt-vcs.dll";
 builder.Services.AddSingleton(_ => new TerminalSessionManager(cliDllPath, int.Parse(port)));
