@@ -23,6 +23,11 @@ public class LoginModel : PageModel
 
     public string? ErrorMessage { get; set; }
 
+    // Set by Admin/Settings after a username change forces a sign-out — see
+    // those pages' OnPostUpdateAccountAsync/OnPostChangeUsernameAsync for why.
+    [TempData]
+    public string? InfoMessage { get; set; }
+
     public void OnGet()
     {
     }

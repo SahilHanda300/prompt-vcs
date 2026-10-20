@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -106,10 +105,6 @@ public class AdminModel : PageModel
             if (wantsUsernameChange)
             {
                 var result = await _client.ChangeUsernameAsync(CurrentPassword, NewUsername.Trim(), token);
-                // Re-issue the cookie with the new name — otherwise the page
-                // (and the rest of the app) would keep showing the old
-                // username until the cookie's natural 30-day expiry.
-                await SignInAsync(result.Username, token, isAdmin: true);
                 successes.Add($"username changed to \"{result.Username}\"");
             }
             if (wantsPasswordChange)
@@ -118,22 +113,34 @@ public class AdminModel : PageModel
                 successes.Add("password changed");
             }
 
-            // Redirect rather than falling through to Page(): a username
-            // change just re-issued the auth cookie (see SignInAsync), and
-            // ASP.NET Core's antiforgery tokens are bound to the
-            // authenticated username. Re-rendering this same response would
-            // embed a fresh antiforgery token, but the request that renders
-            // it is still running under the OLD identity (SignInAsync only
-            // sets the outgoing cookie — it doesn't change who THIS request
-            // is authenticated as). A second update submitted shortly after
-            // would then be validated under the now-current (new) identity
-            // against a token minted under the old one, and fail with a bare
-            // 400 — the exact bug this redirect avoids, for any number of
-            // back-to-back updates, not just one. The redirect forces a
-            // fresh GET that authenticates from the new cookie and renders
-            // tokens that actually match it.
-            FlashSuccessMessage = char.ToUpperInvariant(successes[0][0]) + successes[0][1..] +
-                (successes.Count > 1 ? " and " + successes[1] : "") + ".";
+            if (wantsUsernameChange)
+            {
+                // Force a clean re-login instead of reissuing this session's
+                // cookie in place. ASP.NET Core's antiforgery tokens are
+                // bound to the authenticated username, and there is no way
+                // to atomically swap "the cookie" and "every antiforgery
+                // token already rendered into this and other open tabs" at
+                // the same instant — a prior attempt here (reissue + redirect
+                // back to /Admin) still left a window where the background
+                // cookie-revalidation in Program.cs (OnValidatePrincipal)
+                // could swap HttpContext.User to the new username mid
+                // request, out from under a token that was rendered for the
+                // old one, producing the exact "meant for a different
+                // claims-based user" 400 this replaces. Signing out removes
+                // all of that identity-bound state in one step — the next
+                // antiforgery token the admin gets is minted for an
+                // anonymous request, and only becomes username-bound again
+                // after they log back in with the new name.
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                // Shares the "InfoMessage" TempData key LoginModel reads —
+                // TempData is one dictionary per session, not per page type.
+                TempData["InfoMessage"] = successes.Count > 1
+                    ? $"Username changed to \"{NewUsername.Trim()}\" and password changed — log in with your new username."
+                    : $"Username changed to \"{NewUsername.Trim()}\" — log in with your new username.";
+                return RedirectToPage("/Login");
+            }
+
+            FlashSuccessMessage = char.ToUpperInvariant(successes[0][0]) + successes[0][1..] + ".";
             return RedirectToPage();
         }
         catch (InvalidOperationException ex)
@@ -279,28 +286,6 @@ public class AdminModel : PageModel
         if (token == null) return (null, RedirectToPage("/Login"));
         if (!User.IsPromptVcsAdmin()) return (null, RedirectToPage("/Dashboard"));
         return (token, null);
-    }
-
-    private async Task SignInAsync(string username, string sessionToken, bool isAdmin)
-    {
-        var identity = new ClaimsIdentity(
-            ClaimsPrincipalExtensions.BuildClaims(username, sessionToken, isAdmin),
-            CookieAuthenticationDefaults.AuthenticationScheme);
-        var principal = new ClaimsPrincipal(identity);
-        await HttpContext.SignInAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            principal,
-            new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30) });
-        // SignInAsync only sets the outgoing Set-Cookie header — it doesn't
-        // update HttpContext.User for the rest of THIS request. Since this
-        // handler calls LoadAsync+Page() (not a redirect) right after, any
-        // antiforgery token rendered into that same response would otherwise
-        // still carry the pre-change username, and ASP.NET Core's antiforgery
-        // system binds a token to the authenticated username — so the first
-        // POST against that page (e.g. Log out) after a username change
-        // would fail validation with a bare 400. Updating User here keeps
-        // this request's own render consistent with the cookie it just sent.
-        HttpContext.User = principal;
     }
 
     private async Task LoadAsync(string token)

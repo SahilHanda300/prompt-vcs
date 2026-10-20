@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -65,16 +64,14 @@ public class SettingsModel : PageModel
         try
         {
             var result = await _client.ChangeUsernameAsync(UsernamePassword, NewUsername.Trim(), token);
-            // The auth cookie carries the username as a claim — it has to be
-            // re-issued with the new value, or the page would keep showing
-            // (and the rest of the app would keep acting as) the old name
-            // until the cookie naturally expired.
-            await SignInAsync(result.Username, token, User.IsPromptVcsAdmin());
-            // Redirect, not Page() — see Admin.cshtml.cs's OnPostUpdateAccountAsync
-            // for why re-rendering here would leave a stale antiforgery token
-            // that fails the next submission.
-            FlashSuccessMessage = $"Username changed to \"{result.Username}\".";
-            return RedirectToPage();
+            // Force a clean re-login rather than reissuing this session's
+            // cookie in place — see Admin.cshtml.cs's OnPostUpdateAccountAsync
+            // for why. Signing out removes every bit of identity-bound
+            // antiforgery state in one step instead of trying to keep the
+            // cookie and open forms' tokens in lockstep.
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            TempData["InfoMessage"] = $"Username changed to \"{result.Username}\" — log in with your new username.";
+            return RedirectToPage("/Login");
         }
         catch (InvalidOperationException ex)
         {
@@ -112,20 +109,5 @@ public class SettingsModel : PageModel
             ErrorMessage = ex.Message;
         }
         return Page();
-    }
-
-    private async Task SignInAsync(string username, string sessionToken, bool isAdmin)
-    {
-        var identity = new ClaimsIdentity(
-            ClaimsPrincipalExtensions.BuildClaims(username, sessionToken, isAdmin),
-            CookieAuthenticationDefaults.AuthenticationScheme);
-        var principal = new ClaimsPrincipal(identity);
-        await HttpContext.SignInAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            principal,
-            new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30) });
-        // See Admin.cshtml.cs's SignInAsync for why this line is needed —
-        // same same-request antiforgery/username mismatch.
-        HttpContext.User = principal;
     }
 }

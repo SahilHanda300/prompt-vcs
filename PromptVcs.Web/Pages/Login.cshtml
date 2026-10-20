@@ -8,7 +8,7 @@
     <h1 class="text-2xl font-bold mb-2 text-center">Log in</h1>
     <p class="text-slate-500 dark:text-slate-400 text-sm text-center mb-8">Same account as the CLI and browser terminal.</p>
 
-    <partial name="_Toast" model="new ToastData(Model.ErrorMessage, null)" />
+    <partial name="_Toast" model="new ToastData(Model.ErrorMessage, Model.InfoMessage)" />
 
     <form method="post" class="flex flex-col gap-4">
         <div>
