@@ -88,24 +88,29 @@
         {
             <div class="bg-white dark:bg-brown-800 border border-brown-200 dark:border-brown-700 rounded-xl p-5 sm:p-6 mb-10">
                 <h2 class="text-lg font-semibold mb-4">Admin actions</h2>
-                <p class="text-brown-500 dark:text-brown-400 text-sm mb-4">This prompt belongs to another user — its content is shown read-only. You can re-run it as-is for them, or rename it.</p>
+                <p class="text-brown-500 dark:text-brown-400 text-sm mb-4">This prompt belongs to another user — its content is shown read-only. You can rename it or delete it.</p>
 
                 <textarea rows="6" readonly disabled
                           class="w-full px-3 py-2.5 rounded-lg border border-brown-300 dark:border-brown-600 bg-brown-50 dark:bg-brown-900 text-brown-800 dark:text-brown-100 text-sm font-mono opacity-80 cursor-not-allowed">@Model.EditContent</textarea>
 
-                <div class="flex flex-wrap gap-3 mt-4">
-                    <form method="post" asp-page-handler="Run">
-                        <button type="submit"
-                                class="px-6 py-2.5 rounded-lg bg-brown-500 hover:bg-brown-600 text-white font-semibold text-sm transition active:scale-[0.97]">
-                            Run again for @record.Owner
-                        </button>
-                    </form>
+                <div class="flex flex-wrap items-center gap-4 mt-4">
                     <form method="post" asp-page-handler="Rename" class="flex items-center gap-2">
                         <input type="text" name="NewPromptName" value="@Model.NewPromptName" placeholder="New name" maxlength="80"
                                class="px-3 py-2 rounded-lg border border-brown-300 dark:border-brown-600 bg-brown-50 dark:bg-brown-900 text-brown-800 dark:text-brown-100 text-sm focus:outline-none focus:ring-2 focus:ring-brown-400" />
-                        <button type="submit"
-                                class="px-5 py-2 rounded-lg bg-brown-200 hover:bg-brown-300 dark:bg-brown-700 dark:hover:bg-brown-600 text-brown-800 dark:text-brown-100 font-semibold text-sm transition active:scale-[0.97]">
-                            Rename
+                        <button type="submit" title="Rename" aria-label="Rename"
+                                class="p-2 rounded-md text-brown-600 dark:text-brown-300 hover:bg-brown-200 dark:hover:bg-brown-700 hover:text-brown-800 dark:hover:text-brown-100 transition active:scale-90">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 4.5l3 3L8 19H5v-3L16.5 4.5z" />
+                            </svg>
+                        </button>
+                    </form>
+                    <form method="post" asp-page-handler="Delete">
+                        <button type="submit" title="Delete prompt" aria-label="Delete prompt"
+                                class="p-2 rounded-md text-brown-600 dark:text-brown-300 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-600 dark:hover:text-red-400 transition active:scale-90">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-5 h-5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 7h14M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7m2 0v12a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 19V7h10z" />
+                                <path stroke-linecap="round" d="M10 11v6M14 11v6" />
+                            </svg>
                         </button>
                     </form>
                 </div>

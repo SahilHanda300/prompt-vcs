@@ -49,8 +49,8 @@ public class PromptModel : PageModel
     // another user's prompt is rejected server-side before Record is ever
     // set) gets a read-only view instead: changing someone else's prompt
     // text isn't an admin action, it's silently speaking for them. What an
-    // admin can still do there is re-run the existing content unchanged
-    // and rename the prompt — see OnPostRunAsync/OnPostRenameAsync.
+    // admin can do there is rename or delete the prompt — see
+    // OnPostRenameAsync/OnPostDeleteAsync.
     public bool CanEditContent => Record == null || Record.Owner == null || Record.Owner == User.Identity?.Name;
 
     public async Task<IActionResult> OnGetAsync()
@@ -109,32 +109,20 @@ public class PromptModel : PageModel
         }
     }
 
-    /// Re-runs the prompt's current (latest) content through the pipeline
-    /// unchanged — the admin-viewing-someone-else's-prompt equivalent of
-    /// "Submit an edit", without putting different words in the owner's
-    /// mouth. Sources the content from the stored record (LoadAsync),
-    /// never from a form field, since this page shows no editable content
-    /// box when CanEditContent is false.
-    public async Task<IActionResult> OnPostRunAsync()
+    public async Task<IActionResult> OnPostDeleteAsync()
     {
         var token = User.GetSessionToken();
         if (token == null) return RedirectToPage("/Login");
 
-        await LoadAsync(token);
-        if (Record == null)
-        {
-            return Page();
-        }
-
         try
         {
-            await _client.EditAsync(Name, EditContent, null, token);
-            FlashSuccessMessage = "Re-ran the current content through the pipeline.";
-            return RedirectToPage("/Prompt", new { name = Name });
+            await _client.DeletePromptAsync(Name, token);
+            return RedirectToPage("/Dashboard");
         }
         catch (InvalidOperationException ex)
         {
             ErrorMessage = ex.Message;
+            await LoadAsync(token);
             return Page();
         }
     }
