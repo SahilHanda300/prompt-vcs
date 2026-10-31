@@ -29,6 +29,21 @@ public static class ClaimsPrincipalExtensions
     public static List<Claim> BuildClaims(string username, string sessionToken, bool isAdmin) => new()
     {
         new(ClaimTypes.Name, username),
+        // Without a ClaimTypes.NameIdentifier claim, ASP.NET Core's
+        // antiforgery system has no single stable claim to bind a token to
+        // "the current user" — it falls back to hashing every claim on the
+        // identity instead, ValidatedAtClaimType included. That claim's
+        // value changes on every successful background revalidation (see
+        // Program.cs's OnValidatePrincipal, every ~30s), so a token
+        // rendered into a page before a revalidation cycle no longer
+        // matched the identity by the time of the next POST — failing with
+        // "The provided antiforgery token was meant for a different
+        // claims-based user than the current user" on any form submitted
+        // more than ~30s after its page loaded, regardless of which page.
+        // The session token is stable for the life of a session (unlike
+        // the username, which only changes via a forced re-login), so
+        // pinning it here gives antiforgery a fixed anchor instead.
+        new(ClaimTypes.NameIdentifier, sessionToken),
         new(SessionTokenClaimType, sessionToken),
         new(IsAdminClaimType, isAdmin ? "true" : "false"),
         new(ValidatedAtClaimType, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
