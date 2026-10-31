@@ -18,7 +18,7 @@ public record AttachmentDto(string FileName, string ContentType, string Base64Da
 
 public record PromptVersionDto(int Version, string Content, DateTimeOffset CreatedAt, List<AttachmentDto>? Attachments = null);
 public record EnvironmentsDto(int? Dev, int? Qa, int? Prod);
-public record PromptRecordDto(string Id, string Name, List<PromptVersionDto> History, EnvironmentsDto Environments, List<QaCheckpointDto> QaCheckpoints, List<BuildDto> Builds);
+public record PromptRecordDto(string Id, string Name, string? Owner, List<PromptVersionDto> History, EnvironmentsDto Environments, List<QaCheckpointDto> QaCheckpoints, List<BuildDto> Builds);
 public record ShowResultDto(PromptRecordDto Record, int Version, string Content);
 
 public record DiffLineDto(string Type, string Text);
@@ -33,4 +33,5 @@ public record CreateUserResultDto(bool Created);
 public record UpdateUserResultDto(string Username);
 public record DeleteUserResultDto(bool Deleted);
 public record DeletePromptResultDto(bool Deleted);
+public record RenamePromptResultDto(bool Renamed, string Name);
 public record WhoAmIResultDto(string Username, bool IsAdmin);

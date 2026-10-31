@@ -60,6 +60,30 @@ public class PromptService : IPromptService
         }
     }
 
+    public void Rename(Store store, string name, string newName, string callerUsername, bool callerIsAdmin)
+    {
+        var record = GetOwnedOrThrow(store, name, callerUsername, callerIsAdmin);
+        var newId = Slugify(newName);
+        if (newId != record.Id && store.Prompts.ContainsKey(newId))
+        {
+            throw new InvalidOperationException($"A prompt named \"{newName}\" (id \"{newId}\") already exists.");
+        }
+        store.Prompts.Remove(record.Id);
+        record.Id = newId;
+        record.Name = newName;
+        store.Prompts[newId] = record;
+    }
+
+    public List<string> DeleteAllOwnedBy(Store store, string username)
+    {
+        var ids = store.Prompts.Values.Where(r => r.Owner == username).Select(r => r.Id).ToList();
+        foreach (var id in ids)
+        {
+            store.Prompts.Remove(id);
+        }
+        return ids;
+    }
+
     public List<PromptRecord> List(Store store, string callerUsername, bool callerIsAdmin) =>
         store.Prompts.Values
             .Where(r => callerIsAdmin || r.Owner == null || r.Owner == callerUsername)

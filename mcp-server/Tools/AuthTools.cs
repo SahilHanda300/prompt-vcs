@@ -22,12 +22,14 @@ public class AuthTools
     private readonly IAuthService _auth;
     private readonly IServerStore _store;
     private readonly IPromptService _promptService;
+    private readonly string _siteDir;
 
-    public AuthTools(IAuthService auth, IServerStore store, IPromptService promptService)
+    public AuthTools(IAuthService auth, IServerStore store, IPromptService promptService, IWebHostEnvironment env)
     {
         _auth = auth;
         _store = store;
         _promptService = promptService;
+        _siteDir = Path.Combine(env.ContentRootPath, "site");
     }
 
     /// Every prompt owned by oldUsername now belongs to newUsername instead
@@ -43,6 +45,26 @@ public class AuthTools
             _promptService.RenameOwner(store, oldUsername, newUsername);
             return Task.FromResult<object?>(null);
         });
+    }
+
+    /// Deleting a user should delete everything that was theirs, not just
+    /// the account — otherwise every prompt they made survives as an
+    /// orphan, permanently invisible to everyone but an admin and forever
+    /// un-ownable by anyone. Removes the store records first (inside the
+    /// same lock as every other store mutation), then best-effort deletes
+    /// each prompt's generated site directory — same division PromptTools'
+    /// own deletePrompt already uses, just for every prompt at once.
+    private async Task CascadeOwnerDeleteAsync(string username)
+    {
+        var deletedIds = await _store.MutateAsync(store => Task.FromResult(_promptService.DeleteAllOwnedBy(store, username)));
+        foreach (var id in deletedIds)
+        {
+            var promptDir = Path.Combine(_siteDir, id);
+            if (Directory.Exists(promptDir))
+            {
+                Directory.Delete(promptDir, recursive: true);
+            }
+        }
     }
 
     [McpServerTool(Name = "login"), Description("Logs in with a username and password, returning a session token.")]
@@ -175,9 +197,10 @@ public class AuthTools
     }
 
     [McpServerTool(Name = "deleteUser"), Description(
-        "Permanently deletes a user account and logs out all of their sessions — admin only. " +
-        "Refuses to delete your own account or the last remaining admin. Does not delete that " +
-        "user's prompts (use deletePrompt/admin tools for those separately).")]
+        "Permanently deletes a user account, logs out all of their sessions, and deletes every " +
+        "prompt they owned (version/QA/build history and generated site files included) — " +
+        "admin only. Refuses to delete your own account or the last remaining admin. Cannot be " +
+        "undone.")]
     public async Task<string> DeleteUser(
         [Description("Session token")] string? sessionToken,
         [Description("Username of the account to delete")] string targetUsername)
@@ -189,7 +212,9 @@ public class AuthTools
         if (!callerIsAdmin) return Error("Admin privileges required for this command.");
 
         var (success, message) = await _auth.AdminDeleteUserAsync(targetUsername, callerUsername!);
-        return success ? Ok(new { deleted = true }) : Error(message!);
+        if (!success) return Error(message!);
+        await CascadeOwnerDeleteAsync(targetUsername);
+        return Ok(new { deleted = true });
     }
 
     private static string Ok(object data) => JsonSerializer.Serialize(new { status = "ok", data }, JsonOptions);

@@ -27,17 +27,38 @@ public class PromptModel : PageModel
     [BindProperty]
     public List<IFormFile>? Attachments { get; set; }
 
+    [BindProperty]
+    public string NewPromptName { get; set; } = "";
+
     public PromptRecordDto? Record { get; set; }
     public int Version { get; set; }
     public List<DiffLineDto>? DiffLines { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? SuccessMessage { get; set; }
     public string SiteBaseUrl => ServerClient.SiteBaseUrl();
+
+    // Carries a success message across the redirect that follows a run/
+    // rename — both are PRG (redirect-on-success), so a plain property set
+    // before the redirect wouldn't survive into the page that renders it.
+    [TempData]
+    public string? FlashSuccessMessage { get; set; }
+
+    // A legacy (ownerless) prompt, or one the viewer owns, gets the normal
+    // "edit content and re-run" form. An admin viewing someone else's
+    // prompt (the only other way to reach this page — a non-admin viewing
+    // another user's prompt is rejected server-side before Record is ever
+    // set) gets a read-only view instead: changing someone else's prompt
+    // text isn't an admin action, it's silently speaking for them. What an
+    // admin can still do there is re-run the existing content unchanged
+    // and rename the prompt — see OnPostRunAsync/OnPostRenameAsync.
+    public bool CanEditContent => Record == null || Record.Owner == null || Record.Owner == User.Identity?.Name;
 
     public async Task<IActionResult> OnGetAsync()
     {
         var token = User.GetSessionToken();
         if (token == null) return RedirectToPage("/Login");
 
+        SuccessMessage ??= FlashSuccessMessage;
         await LoadAsync(token);
 
         if (V1.HasValue && V2.HasValue)
@@ -79,6 +100,62 @@ public class PromptModel : PageModel
         {
             await _client.EditAsync(Name, EditContent, attachments, token);
             return RedirectToPage("/Prompt", new { name = Name });
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadAsync(token);
+            return Page();
+        }
+    }
+
+    /// Re-runs the prompt's current (latest) content through the pipeline
+    /// unchanged — the admin-viewing-someone-else's-prompt equivalent of
+    /// "Submit an edit", without putting different words in the owner's
+    /// mouth. Sources the content from the stored record (LoadAsync),
+    /// never from a form field, since this page shows no editable content
+    /// box when CanEditContent is false.
+    public async Task<IActionResult> OnPostRunAsync()
+    {
+        var token = User.GetSessionToken();
+        if (token == null) return RedirectToPage("/Login");
+
+        await LoadAsync(token);
+        if (Record == null)
+        {
+            return Page();
+        }
+
+        try
+        {
+            await _client.EditAsync(Name, EditContent, null, token);
+            FlashSuccessMessage = "Re-ran the current content through the pipeline.";
+            return RedirectToPage("/Prompt", new { name = Name });
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = ex.Message;
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostRenameAsync()
+    {
+        var token = User.GetSessionToken();
+        if (token == null) return RedirectToPage("/Login");
+
+        if (string.IsNullOrWhiteSpace(NewPromptName))
+        {
+            ErrorMessage = "New name is required.";
+            await LoadAsync(token);
+            return Page();
+        }
+
+        try
+        {
+            var result = await _client.RenamePromptAsync(Name, NewPromptName.Trim(), token);
+            FlashSuccessMessage = $"Renamed to \"{result.Name}\".";
+            return RedirectToPage("/Prompt", new { name = result.Name });
         }
         catch (InvalidOperationException ex)
         {

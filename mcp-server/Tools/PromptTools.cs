@@ -92,6 +92,37 @@ public class PromptTools
         return await RunPipelineAsync(store => _promptService.EditAsync(store, name, content, username!, isAdmin, attachments));
     }
 
+    [McpServerTool(Name = "renamePrompt"), Description(
+        "Renames a prompt — its display name and id, not its owner or content/history. Only " +
+        "the prompt's owner or an admin may rename it; fails if another prompt already has the " +
+        "new name.")]
+    public async Task<string> RenamePrompt(
+        [Description("Current prompt name")] string name,
+        [Description("New prompt name")] string newName,
+        [Description("Session token")] string? sessionToken = null)
+    {
+        var (authError, username, isAdmin) = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        if (authError != null) return authError;
+
+        try
+        {
+            await _store.MutateAsync<object?>(store =>
+            {
+                _promptService.Rename(store, name, newName, username!, isAdmin);
+                return Task.FromResult<object?>(null);
+            });
+            return Ok(new { renamed = true, name = newName });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Error(ex.Message);
+        }
+        catch (PromptAccessDeniedException ex)
+        {
+            return Error(ex.Message);
+        }
+    }
+
     [McpServerTool(Name = "deletePrompt"), Description(
         "Permanently deletes a prompt and its version/QA/build history. Only the prompt's " +
         "owner or an admin may delete it. Does not delete the generated site files on disk.")]

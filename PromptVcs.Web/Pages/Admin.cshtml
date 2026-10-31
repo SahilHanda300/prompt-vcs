@@ -115,8 +115,7 @@
                                         <button type="submit" class="self-start px-4 py-1.5 rounded-md bg-brown-500 hover:bg-brown-600 text-white font-semibold text-xs transition active:scale-[0.97]">Save changes</button>
                                     </form>
 
-                                    <form method="post" asp-page-handler="DeleteUser" class="pt-2 border-t border-brown-200 dark:border-brown-700"
-                                          onsubmit="return confirm('Delete user \'@u.Username\'? This cannot be undone. Their prompts are kept (still manageable from the Prompts section below), only the account is removed.');">
+                                    <form method="post" asp-page-handler="DeleteUser" class="pt-2 border-t border-brown-200 dark:border-brown-700">
                                         <input type="hidden" name="targetUsername" value="@u.Username" />
                                         <button type="submit" class="mt-2 px-4 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition active:scale-[0.97]">Delete user</button>
                                     </form>
@@ -185,8 +184,7 @@
                             {
                                 <div class="flex items-center justify-between gap-3 py-2.5 text-sm">
                                     <a asp-page="/Prompt" asp-route-name="@p.Name" class="font-medium hover:text-brown-600 dark:hover:text-brown-400 transition truncate min-w-0">@p.Name</a>
-                                    <form method="post" asp-page-handler="DeletePrompt"
-                                          onsubmit="return confirm('Delete prompt \'@p.Name\'? This cannot be undone.');">
+                                    <form method="post" asp-page-handler="DeletePrompt">
                                         <input type="hidden" name="name" value="@p.Name" />
                                         <button type="submit" class="flex-none px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition active:scale-[0.97]">Delete</button>
                                     </form>
@@ -204,7 +202,7 @@
     <div class="bg-white dark:bg-brown-800 border border-red-500/40 rounded-xl p-5 sm:p-6">
         <h2 class="text-lg font-semibold mb-1 text-red-600 dark:text-red-400">Danger zone</h2>
         <p class="text-brown-500 dark:text-brown-400 text-sm mb-4">Wipes every prompt, QA checkpoint, build record, and generated site on this server, for every user. Cannot be undone.</p>
-        <form method="post" asp-page-handler="Reset" onsubmit="return confirm('This deletes every prompt and generated site on this server, for every user. This cannot be undone. Continue?');">
+        <form method="post" asp-page-handler="Reset">
             <button type="submit"
                     class="px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition active:scale-[0.97]">
                 Reset entire store

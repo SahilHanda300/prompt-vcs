@@ -110,6 +110,9 @@ public class ServerClient
     public Task<DeletePromptResultDto> DeletePromptAsync(string name, string sessionToken) =>
         CallAsync<DeletePromptResultDto>("deletePrompt", new Dictionary<string, object?> { ["name"] = name, ["sessionToken"] = sessionToken });
 
+    public Task<RenamePromptResultDto> RenamePromptAsync(string name, string newName, string sessionToken) =>
+        CallAsync<RenamePromptResultDto>("renamePrompt", new Dictionary<string, object?> { ["name"] = name, ["newName"] = newName, ["sessionToken"] = sessionToken });
+
     public Task<PipelineResultDto> CreateAsync(string name, string content, List<AttachmentDto>? attachments, string sessionToken) =>
         CallAsync<PipelineResultDto>("create", new Dictionary<string, object?>
         {
