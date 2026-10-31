@@ -84,13 +84,28 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 context.ReplacePrincipal(new ClaimsPrincipal(identity));
                 context.ShouldRenew = true;
             }
-            catch (InvalidOperationException)
+            catch (McpServerErrorException)
             {
-                // Session no longer valid server-side (logged out elsewhere,
-                // revoked, or the account was deleted) — a stale cookie must
-                // not keep granting access on the strength of its own say-so.
+                // The server itself answered and said this token is no
+                // longer valid (logged out elsewhere, revoked, or the
+                // account was deleted) — a stale cookie must not keep
+                // granting access on the strength of its own say-so.
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
+            catch (InvalidOperationException)
+            {
+                // Couldn't even complete the check (MCP server unreachable,
+                // timeout, bad response) — not evidence the session itself
+                // is bad. Keep trusting the existing cookie for this request
+                // rather than signing the admin out over what might be a
+                // one-off network blip: doing that here previously reset
+                // HttpContext.User mid-request, which made this SAME
+                // request's own antiforgery token — already minted for the
+                // identity the cookie carried when the page was rendered —
+                // fail validation with a bare 400 (e.g. on Admin's Create
+                // User). Worst case, this cycle's revalidation is just
+                // retried in revalidationInterval.
             }
         };
     });

@@ -5,6 +5,26 @@ using ModelContextProtocol.Protocol;
 namespace PromptVcs.Web;
 
 /// <summary>
+/// Thrown specifically when the MCP server responds with a structured
+/// <c>"status":"error"</c> envelope — a real answer from the server, as
+/// opposed to failing to reach it, a timeout, or an unparseable response
+/// (all still plain <see cref="InvalidOperationException"/>, see
+/// ServerClient.CallAsync). For a whoAmI call, this is the only way the
+/// server can fail, so it reliably means "this session token is no longer
+/// valid" — Program.cs's OnValidatePrincipal relies on that distinction to
+/// avoid signing an admin out over a transient network/infra hiccup during
+/// background revalidation (which previously looked identical to a
+/// genuinely dead session, and silently broke the very request that
+/// triggered it — antiforgery tokens are bound to the signed-in username,
+/// so a mid-request sign-out made that request's own token "belong" to
+/// nobody, failing with a bare 400).
+/// </summary>
+public class McpServerErrorException : InvalidOperationException
+{
+    public McpServerErrorException(string message) : base(message) { }
+}
+
+/// <summary>
 /// The web app's only connection to the outside world: a real MCP client
 /// calling the server's login/register/logout and create/edit/list/show/diff
 /// tools — same tool surface PromptVcs.Cli uses, mirrored here rather than
@@ -180,7 +200,7 @@ public class ServerClient
             if (status == "error")
             {
                 var message = envelope.TryGetProperty("message", out var msgProp) ? msgProp.GetString() : "Unknown server error.";
-                throw new InvalidOperationException(message);
+                throw new McpServerErrorException(message ?? "Unknown server error.");
             }
 
             if (!envelope.TryGetProperty("data", out var dataProp))
