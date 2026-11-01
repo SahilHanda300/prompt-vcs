@@ -51,6 +51,11 @@ public class PromptRecord
     // prompt always gets an Owner at creation time. Admins bypass
     // ownership entirely regardless of this field — see PromptService.
     public string? Owner { get; set; }
+    // Per-prompt, not per-viewer — toggling it is restricted to the
+    // owner (or an admin, same as every other write here) specifically so
+    // it can't end up meaning different things to different people looking
+    // at the same prompt. See PromptService.ToggleFavorite.
+    public bool IsFavorite { get; set; }
     public List<PromptVersion> History { get; set; } = new();
     public Environments Environments { get; set; } = new();
     public List<QaCheckpoint> QaCheckpoints { get; set; } = new();

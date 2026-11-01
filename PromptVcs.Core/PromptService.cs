@@ -39,6 +39,15 @@ public class PromptService : IPromptService
         return _pipeline.SubmitAsync(record, content, attachments);
     }
 
+    /// Flips IsFavorite and returns the new value. Same owner-or-admin
+    /// authorization as Edit/Delete/Rename.
+    public bool ToggleFavorite(Store store, string name, string callerUsername, bool callerIsAdmin)
+    {
+        var record = GetOwnedOrThrow(store, name, callerUsername, callerIsAdmin);
+        record.IsFavorite = !record.IsFavorite;
+        return record.IsFavorite;
+    }
+
     /// Removes the prompt record entirely. Does NOT touch anything on disk
     /// (generated artifacts) — callers with access to the site directory
     /// (currently only PromptTools, same as "reset") delete that
@@ -87,7 +96,8 @@ public class PromptService : IPromptService
     public List<PromptRecord> List(Store store, string callerUsername, bool callerIsAdmin) =>
         store.Prompts.Values
             .Where(r => callerIsAdmin || r.Owner == null || r.Owner == callerUsername)
-            .OrderBy(r => r.Name, StringComparer.Ordinal)
+            .OrderByDescending(r => r.IsFavorite)
+            .ThenBy(r => r.Name, StringComparer.Ordinal)
             .ToList();
 
     public (PromptRecord Record, int Version, string Content) Show(Store store, string name, string callerUsername, bool callerIsAdmin, int? version = null)

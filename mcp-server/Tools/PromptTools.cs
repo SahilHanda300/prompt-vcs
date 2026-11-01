@@ -123,6 +123,32 @@ public class PromptTools
         }
     }
 
+    [McpServerTool(Name = "toggleFavorite"), Description(
+        "Flips a prompt's favorite flag and returns the new value. Only the prompt's owner or " +
+        "an admin may toggle it.")]
+    public async Task<string> ToggleFavorite(
+        [Description("Prompt name")] string name,
+        [Description("Session token")] string? sessionToken = null)
+    {
+        var (authError, username, isAdmin) = await RequireAuthAsync(sessionToken, requireAdmin: false);
+        if (authError != null) return authError;
+
+        try
+        {
+            var isFavorite = await _store.MutateAsync(store =>
+                Task.FromResult(_promptService.ToggleFavorite(store, name, username!, isAdmin)));
+            return Ok(new { isFavorite });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Error(ex.Message);
+        }
+        catch (PromptAccessDeniedException ex)
+        {
+            return Error(ex.Message);
+        }
+    }
+
     [McpServerTool(Name = "deletePrompt"), Description(
         "Permanently deletes a prompt and its version/QA/build history. Only the prompt's " +
         "owner or an admin may delete it. Does not delete the generated site files on disk.")]
@@ -207,6 +233,7 @@ public class PromptTools
             {
                 name = r.Name,
                 owner = r.Owner,
+                isFavorite = r.IsFavorite,
                 dev = r.Environments.Dev,
                 qa = r.Environments.Qa,
                 prod = r.Environments.Prod,

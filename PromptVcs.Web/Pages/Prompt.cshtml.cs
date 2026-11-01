@@ -109,6 +109,24 @@ public class PromptModel : PageModel
         }
     }
 
+    public async Task<IActionResult> OnPostToggleFavoriteAsync()
+    {
+        var token = User.GetSessionToken();
+        if (token == null) return RedirectToPage("/Login");
+
+        try
+        {
+            await _client.ToggleFavoriteAsync(Name, token);
+            return RedirectToPage("/Prompt", new { name = Name });
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadAsync(token);
+            return Page();
+        }
+    }
+
     public async Task<IActionResult> OnPostDeleteAsync()
     {
         var token = User.GetSessionToken();

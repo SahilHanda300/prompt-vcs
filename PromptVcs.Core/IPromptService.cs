@@ -14,6 +14,10 @@ public interface IPromptService
     Task<PipelineResult> EditAsync(Store store, string name, string content, string callerUsername, bool callerIsAdmin, List<Attachment>? attachments = null);
     void Delete(Store store, string name, string callerUsername, bool callerIsAdmin);
 
+    /// Flips a prompt's favorite flag and returns the new value. Only the
+    /// prompt's owner or an admin may toggle it, same as Edit/Delete.
+    bool ToggleFavorite(Store store, string name, string callerUsername, bool callerIsAdmin);
+
     /// Called whenever a username changes (self-service rename or an admin
     /// renaming someone else) — without this, every prompt that user owns
     /// would silently become inaccessible to them.

@@ -15,6 +15,12 @@ public class DashboardModel : PageModel
     public List<PromptListItemDto> Prompts { get; set; } = new();
     public string? ErrorMessage { get; set; }
 
+    // OnPostToggleFavoriteAsync redirects back here (PRG) rather than
+    // re-rendering directly, so a plain ErrorMessage set before that
+    // redirect wouldn't survive into the page that renders it.
+    [TempData]
+    public string? FlashErrorMessage { get; set; }
+
     [BindProperty]
     public string NewPromptName { get; set; } = "";
 
@@ -26,6 +32,7 @@ public class DashboardModel : PageModel
 
     public async Task<IActionResult> OnGetAsync()
     {
+        ErrorMessage ??= FlashErrorMessage;
         await LoadPromptsAsync();
         return Page();
     }
@@ -61,6 +68,22 @@ public class DashboardModel : PageModel
             await LoadPromptsAsync();
             return Page();
         }
+    }
+
+    public async Task<IActionResult> OnPostToggleFavoriteAsync(string name)
+    {
+        var token = User.GetSessionToken();
+        if (token == null) return RedirectToPage("/Login");
+
+        try
+        {
+            await _client.ToggleFavoriteAsync(name, token);
+        }
+        catch (InvalidOperationException ex)
+        {
+            FlashErrorMessage = ex.Message;
+        }
+        return RedirectToPage("/Dashboard");
     }
 
     private async Task LoadPromptsAsync()
