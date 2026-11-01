@@ -40,6 +40,12 @@ public class ServerClient
     public async Task<DeletePromptResultDto> DeletePromptAsync(string name) =>
         await CallAsync<DeletePromptResultDto>("deletePrompt", new Dictionary<string, object?> { ["name"] = name });
 
+    public async Task<RenamePromptResultDto> RenamePromptAsync(string name, string newName) =>
+        await CallAsync<RenamePromptResultDto>("renamePrompt", new Dictionary<string, object?> { ["name"] = name, ["newName"] = newName });
+
+    public async Task<ToggleFavoriteResultDto> ToggleFavoriteAsync(string name) =>
+        await CallAsync<ToggleFavoriteResultDto>("toggleFavorite", new Dictionary<string, object?> { ["name"] = name });
+
     public async Task<PipelineResultDto> CreateAsync(string name, string content) =>
         await CallAsync<PipelineResultDto>("create", new Dictionary<string, object?> { ["name"] = name, ["content"] = content });
 
@@ -54,6 +60,21 @@ public class ServerClient
 
     public async Task<List<DiffLineDto>> DiffAsync(string name, int v1, int v2) =>
         await CallAsync<List<DiffLineDto>>("diff", new Dictionary<string, object?> { ["name"] = name, ["v1"] = v1, ["v2"] = v2 });
+
+    public async Task<WhoAmIResultDto> WhoAmIAsync() =>
+        await CallAsync<WhoAmIResultDto>("whoAmI", new Dictionary<string, object?>());
+
+    public async Task<List<UserDto>> ListUsersAsync() =>
+        await CallAsync<List<UserDto>>("listUsers", new Dictionary<string, object?>());
+
+    public async Task<CreateUserResultDto> CreateUserAsync(string username, string password, bool isAdmin) =>
+        await CallAsync<CreateUserResultDto>("createUser", new Dictionary<string, object?> { ["username"] = username, ["password"] = password, ["isAdmin"] = isAdmin });
+
+    public async Task<UpdateUserResultDto> UpdateUserAsync(string targetUsername, string? newUsername, string? newPassword, bool? isAdmin) =>
+        await CallAsync<UpdateUserResultDto>("updateUser", new Dictionary<string, object?> { ["targetUsername"] = targetUsername, ["newUsername"] = newUsername, ["newPassword"] = newPassword, ["isAdmin"] = isAdmin });
+
+    public async Task<DeleteUserResultDto> DeleteUserAsync(string targetUsername) =>
+        await CallAsync<DeleteUserResultDto>("deleteUser", new Dictionary<string, object?> { ["targetUsername"] = targetUsername });
 
     // requireSession: false for login/register/logout, which have to work
     // before the caller has any session token to present.

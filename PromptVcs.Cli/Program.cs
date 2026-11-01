@@ -24,10 +24,17 @@ var commandUsage = new Dictionary<string, string>
     ["create"] = "create <name> [--content <text> | --file <path>]",
     ["edit"] = "edit <name> [--content <text> | --file <path>]",
     ["delete"] = "delete <name>",
+    ["renameprompt"] = "renameprompt <name> <newName>",
+    ["favorite"] = "favorite <name>",
     ["list"] = "list",
     ["show"] = "show <name> [--version <n>]",
     ["diff"] = "diff <name> <v1> <v2>",
     ["reset"] = "reset",
+    ["whoami"] = "whoami",
+    ["users"] = "users",
+    ["adduser"] = "adduser <username> <password> [--admin]",
+    ["updateuser"] = "updateuser <username> [--username <new>] [--password <new>] [--admin true|false]",
+    ["deleteuser"] = "deleteuser <username>",
 };
 var isInteractive = false;
 
@@ -97,6 +104,12 @@ async Task<int> RunCommandAsync(string[] cmdArgs)
             case "delete":
                 await RunDeleteAsync(RequireArg(cmdArgs, 1, "name"));
                 break;
+            case "renameprompt":
+                await RunRenamePromptAsync(RequireArg(cmdArgs, 1, "name"), RequireArg(cmdArgs, 2, "newName"));
+                break;
+            case "favorite":
+                await RunFavoriteAsync(RequireArg(cmdArgs, 1, "name"));
+                break;
             case "list":
                 await RunListAsync();
                 break;
@@ -108,6 +121,21 @@ async Task<int> RunCommandAsync(string[] cmdArgs)
                 break;
             case "reset":
                 await RunResetAsync();
+                break;
+            case "whoami":
+                await RunWhoAmIAsync();
+                break;
+            case "users":
+                await RunUsersAsync();
+                break;
+            case "adduser":
+                await RunAddUserAsync(RequireArg(cmdArgs, 1, "username"), RequireArg(cmdArgs, 2, "password"), HasFlag(cmdArgs, "--admin"));
+                break;
+            case "updateuser":
+                await RunUpdateUserAsync(RequireArg(cmdArgs, 1, "username"), GetOption(cmdArgs, "--username", "-u"), GetOption(cmdArgs, "--password", "-p"), ParseBoolOption(cmdArgs, "--admin", "-a"));
+                break;
+            case "deleteuser":
+                await RunDeleteUserAsync(RequireArg(cmdArgs, 1, "username"));
                 break;
             case "-h":
             case "--help":
@@ -250,6 +278,40 @@ async Task RunResetAsync()
     WriteLineColor("Store reset. All prompts and generated sites deleted.", ConsoleColor.Yellow);
 }
 
+async Task RunWhoAmIAsync()
+{
+    var result = await client.WhoAmIAsync();
+    Console.WriteLine($"{result.Username}{(result.IsAdmin ? " (admin)" : "")}");
+}
+
+async Task RunUsersAsync()
+{
+    var users = await client.ListUsersAsync();
+    Console.WriteLine(string.Join("\t", new[] { "username", "role" }));
+    foreach (var u in users)
+    {
+        Console.WriteLine($"{u.Username}\t{(u.IsAdmin ? "admin" : "user")}");
+    }
+}
+
+async Task RunAddUserAsync(string username, string password, bool isAdmin)
+{
+    await client.CreateUserAsync(username, password, isAdmin);
+    WriteLineColor($"Created {username}{(isAdmin ? " (admin)" : "")}.", ConsoleColor.Green);
+}
+
+async Task RunUpdateUserAsync(string targetUsername, string? newUsername, string? newPassword, bool? isAdmin)
+{
+    var result = await client.UpdateUserAsync(targetUsername, newUsername, newPassword, isAdmin);
+    WriteLineColor($"Updated {result.Username}.", ConsoleColor.Green);
+}
+
+async Task RunDeleteUserAsync(string targetUsername)
+{
+    await client.DeleteUserAsync(targetUsername);
+    WriteLineColor($"Deleted user \"{targetUsername}\" and everything they owned.", ConsoleColor.Yellow);
+}
+
 async Task RunCreateAsync(string name, string content)
 {
     var result = await client.CreateAsync(name, content);
@@ -268,6 +330,18 @@ async Task RunDeleteAsync(string name)
     WriteLineColor($"Deleted \"{name}\".", ConsoleColor.Yellow);
 }
 
+async Task RunRenamePromptAsync(string name, string newName)
+{
+    var result = await client.RenamePromptAsync(name, newName);
+    WriteLineColor($"Renamed \"{name}\" to \"{result.Name}\".", ConsoleColor.Green);
+}
+
+async Task RunFavoriteAsync(string name)
+{
+    var result = await client.ToggleFavoriteAsync(name);
+    WriteLineColor(result.IsFavorite ? $"★ Favorited \"{name}\"." : $"☆ Unfavorited \"{name}\".", ConsoleColor.Green);
+}
+
 async Task RunListAsync()
 {
     var items = await client.ListAsync();
@@ -281,12 +355,13 @@ async Task RunListAsync()
     // for a normal user every row is their own, so the column would just
     // repeat their own username uselessly.
     var showOwner = items.Any(r => r.Owner != null) && items.Select(r => r.Owner).Distinct().Count() > 1;
-    Console.WriteLine(string.Join("\t", showOwner ? new[] { "name", "owner", "dev", "qa", "prod", "latest build" } : new[] { "name", "dev", "qa", "prod", "latest build" }));
-    foreach (var r in items)
+    Console.WriteLine(string.Join("\t", showOwner ? new[] { "", "name", "owner", "dev", "qa", "prod", "latest build" } : new[] { "", "name", "dev", "qa", "prod", "latest build" }));
+    foreach (var r in items.OrderByDescending(r => r.IsFavorite))
     {
+        var star = r.IsFavorite ? "★" : " ";
         var cols = showOwner
-            ? new[] { r.Name, r.Owner ?? "-", r.Dev?.ToString() ?? "-", r.Qa?.ToString() ?? "-", r.Prod?.ToString() ?? "-" }
-            : new[] { r.Name, r.Dev?.ToString() ?? "-", r.Qa?.ToString() ?? "-", r.Prod?.ToString() ?? "-" };
+            ? new[] { star, r.Name, r.Owner ?? "-", r.Dev?.ToString() ?? "-", r.Qa?.ToString() ?? "-", r.Prod?.ToString() ?? "-" }
+            : new[] { star, r.Name, r.Dev?.ToString() ?? "-", r.Qa?.ToString() ?? "-", r.Prod?.ToString() ?? "-" };
         Console.Write(string.Join("\t", cols) + "\t");
         if (r.LatestBuild != null)
         {
@@ -493,6 +568,14 @@ static int? ParseIntOption(string[] args, string longName, string shortName)
     return value != null ? int.Parse(value) : null;
 }
 
+static bool? ParseBoolOption(string[] args, string longName, string shortName)
+{
+    var value = GetOption(args, longName, shortName);
+    return value != null ? bool.Parse(value) : null;
+}
+
+static bool HasFlag(string[] args, string flag) => args.Contains(flag);
+
 /// Splits a typed line into argv-style tokens, honoring "quoted spans" so
 /// --content "Build a calculator" works when typed directly at the prompt.
 static string[] Tokenize(string line)
@@ -548,10 +631,17 @@ static void PrintUsage()
     PrintCommand("create <name> [--content <text> | --file <path>]", "Creates a new app from a prompt");
     PrintCommand("edit <name> [--content <text> | --file <path>]", "Updates an existing app with a new prompt");
     PrintCommand("delete <name>", "Deletes a prompt (owner or admin only)");
+    PrintCommand("renameprompt <name> <newName>", "Renames a prompt (owner or admin only)");
+    PrintCommand("favorite <name>", "Toggles a prompt's favorite star (owner or admin only)");
     PrintCommand("list", "Lists all apps");
     PrintCommand("show <name> [--version <n>]", "Shows a specific version of an app");
     PrintCommand("diff <name> <v1> <v2>", "Shows the differences between two versions of an app");
     PrintCommand("reset", "Deletes all apps and resets the store (admin only)");
+    PrintCommand("whoami", "Shows the current username and role");
+    PrintCommand("users", "Lists all registered users (admin only)");
+    PrintCommand("adduser <username> <password> [--admin]", "Creates a new user account (admin only)");
+    PrintCommand("updateuser <username> [--username <new>] [--password <new>] [--admin true|false]", "Updates another user's account (admin only)");
+    PrintCommand("deleteuser <username>", "Deletes a user and everything they owned (admin only)");
 }
 
 static void PrintCommand(string usage, string description)
