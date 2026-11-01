@@ -10,13 +10,24 @@
 
     <partial name="_Toast" model="new ToastData(Model.ErrorMessage, Model.SuccessMessage)" />
 
-    <div class="relative mb-6">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brown-400 dark:text-brown-500">
-            <circle cx="10.5" cy="10.5" r="6.5" />
-            <path stroke-linecap="round" d="M20 20l-4.3-4.3" />
-        </svg>
-        <input type="search" id="adminSearch" placeholder="Search users and prompts..." autocomplete="off"
-               class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-brown-300 dark:border-brown-600 bg-white dark:bg-brown-800 text-brown-800 dark:text-brown-100 text-sm focus:outline-none focus:ring-2 focus:ring-brown-400" />
+    <div class="mb-6">
+        <div class="relative">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brown-400 dark:text-brown-500">
+                <circle cx="10.5" cy="10.5" r="6.5" />
+                <path stroke-linecap="round" d="M20 20l-4.3-4.3" />
+            </svg>
+            <input type="text" id="adminSearch" placeholder="Search users and prompts..." autocomplete="off"
+                   class="w-full pl-9 pr-9 py-2.5 rounded-lg border border-brown-300 dark:border-brown-600 bg-white dark:bg-brown-800 text-brown-800 dark:text-brown-100 placeholder:text-brown-400 dark:placeholder:text-brown-500 text-sm focus:outline-none focus:ring-2 focus:ring-brown-400" />
+            <button type="button" id="adminSearchClear" aria-label="Clear search" title="Clear search"
+                    class="hidden absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-brown-400 dark:text-brown-500 hover:text-brown-700 dark:hover:text-brown-100 hover:bg-brown-100 dark:hover:bg-brown-700 transition active:scale-90">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4">
+                    <path stroke-linecap="round" d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </button>
+        </div>
+        <p id="adminSearchSummary" class="hidden mt-2 text-sm text-brown-500 dark:text-brown-400">
+            <span id="adminSearchUserCount"></span><span id="adminSearchSep" class="hidden"> &middot; </span><span id="adminSearchPromptCount"></span>
+        </p>
         <p id="adminSearchNoResults" class="hidden mt-2 text-sm text-brown-500 dark:text-brown-400">No users or prompts match "<span id="adminSearchNoResultsQuery"></span>".</p>
     </div>
 
@@ -262,8 +273,13 @@
             // search never looks like it found nothing just because the
             // wrong tab happened to be showing.
             var searchInput = document.getElementById('adminSearch');
+            var clearButton = document.getElementById('adminSearchClear');
             var noResults = document.getElementById('adminSearchNoResults');
             var noResultsQuery = document.getElementById('adminSearchNoResultsQuery');
+            var summary = document.getElementById('adminSearchSummary');
+            var summaryUserCount = document.getElementById('adminSearchUserCount');
+            var summaryPromptCount = document.getElementById('adminSearchPromptCount');
+            var summarySep = document.getElementById('adminSearchSep');
             var userRows = document.querySelectorAll('#usersList .user-row');
             var ownerGroups = document.querySelectorAll('#promptsList .owner-group');
 
@@ -301,11 +317,23 @@
                     }
                 });
 
+                clearButton.classList.toggle('hidden', !query);
+
                 if (query && userMatches === 0 && promptMatches === 0) {
                     noResultsQuery.textContent = searchInput.value.trim();
                     noResults.classList.remove('hidden');
+                    summary.classList.add('hidden');
+                } else if (query) {
+                    noResults.classList.add('hidden');
+                    summaryUserCount.textContent = userMatches + (userMatches === 1 ? ' user found' : ' users found');
+                    summaryPromptCount.textContent = promptMatches + (promptMatches === 1 ? ' prompt found' : ' prompts found');
+                    summaryUserCount.classList.toggle('hidden', userMatches === 0);
+                    summaryPromptCount.classList.toggle('hidden', promptMatches === 0);
+                    summarySep.classList.toggle('hidden', userMatches === 0 || promptMatches === 0);
+                    summary.classList.remove('hidden');
                 } else {
                     noResults.classList.add('hidden');
+                    summary.classList.add('hidden');
                 }
 
                 if (query && currentTab !== 'danger') {
@@ -313,6 +341,12 @@
                     else if (currentTab === 'prompts' && promptMatches === 0 && userMatches > 0) setTab('users');
                 }
             }
+
+            clearButton.addEventListener('click', function () {
+                searchInput.value = '';
+                applySearch();
+                searchInput.focus();
+            });
 
             searchInput.addEventListener('input', applySearch);
         })();

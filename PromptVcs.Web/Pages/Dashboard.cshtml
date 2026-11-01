@@ -46,14 +46,21 @@
     }
     else
     {
-        <div class="relative mb-4">
+        <div class="relative mb-2">
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brown-400 dark:text-brown-500">
                 <circle cx="10.5" cy="10.5" r="6.5" />
                 <path stroke-linecap="round" d="M20 20l-4.3-4.3" />
             </svg>
-            <input type="search" id="promptSearch" placeholder="Search your prompts..." autocomplete="off"
-                   class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-brown-300 dark:border-brown-600 bg-white dark:bg-brown-800 text-brown-800 dark:text-brown-100 text-sm focus:outline-none focus:ring-2 focus:ring-brown-400" />
+            <input type="text" id="promptSearch" placeholder="Search your prompts..." autocomplete="off"
+                   class="w-full pl-9 pr-9 py-2.5 rounded-lg border border-brown-300 dark:border-brown-600 bg-white dark:bg-brown-800 text-brown-800 dark:text-brown-100 placeholder:text-brown-400 dark:placeholder:text-brown-500 text-sm focus:outline-none focus:ring-2 focus:ring-brown-400" />
+            <button type="button" id="promptSearchClear" aria-label="Clear search" title="Clear search"
+                    class="hidden absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-brown-400 dark:text-brown-500 hover:text-brown-700 dark:hover:text-brown-100 hover:bg-brown-100 dark:hover:bg-brown-700 transition active:scale-90">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4">
+                    <path stroke-linecap="round" d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </button>
         </div>
+        <p id="promptSearchSummary" class="hidden mb-4 text-sm text-brown-500 dark:text-brown-400"></p>
         <p id="promptSearchNoResults" class="hidden mb-4 text-sm text-brown-500 dark:text-brown-400">No prompts match "<span id="promptSearchNoResultsQuery"></span>".</p>
 
         <div id="promptsList" class="flex flex-col gap-3">
@@ -84,10 +91,12 @@
             if (!input) return; // no search box when there are no prompts to search
 
             var cards = document.querySelectorAll('#promptsList .prompt-card');
+            var clearButton = document.getElementById('promptSearchClear');
+            var summary = document.getElementById('promptSearchSummary');
             var noResults = document.getElementById('promptSearchNoResults');
             var noResultsQuery = document.getElementById('promptSearchNoResultsQuery');
 
-            input.addEventListener('input', function () {
+            function applySearch() {
                 var query = input.value.trim().toLowerCase();
                 var matches = 0;
                 cards.forEach(function (card) {
@@ -95,8 +104,28 @@
                     card.classList.toggle('hidden', !match);
                     if (match) matches++;
                 });
-                noResultsQuery.textContent = input.value.trim();
-                noResults.classList.toggle('hidden', !query || matches > 0);
+
+                clearButton.classList.toggle('hidden', !query);
+
+                if (query && matches === 0) {
+                    noResultsQuery.textContent = input.value.trim();
+                    noResults.classList.remove('hidden');
+                    summary.classList.add('hidden');
+                } else if (query) {
+                    noResults.classList.add('hidden');
+                    summary.textContent = matches + (matches === 1 ? ' prompt found' : ' prompts found');
+                    summary.classList.remove('hidden');
+                } else {
+                    noResults.classList.add('hidden');
+                    summary.classList.add('hidden');
+                }
+            }
+
+            input.addEventListener('input', applySearch);
+            clearButton.addEventListener('click', function () {
+                input.value = '';
+                applySearch();
+                input.focus();
             });
         })();
     </script>
