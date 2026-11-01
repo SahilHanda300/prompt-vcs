@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DiffPlex.DiffBuilder;
 using ModelContextProtocol.Server;
 using PromptVcs.Core;
 using PromptVcs.McpServer.Services;
@@ -27,13 +28,15 @@ public class PromptTools
     private readonly IServerStore _store;
     private readonly IPromptService _promptService;
     private readonly IAuthService _auth;
+    private readonly IArtifactWriter _writer;
     private readonly string _siteDir;
 
-    public PromptTools(IServerStore store, IPromptService promptService, IAuthService auth, IWebHostEnvironment env)
+    public PromptTools(IServerStore store, IPromptService promptService, IAuthService auth, IArtifactWriter writer, IWebHostEnvironment env)
     {
         _store = store;
         _promptService = promptService;
         _auth = auth;
+        _writer = writer;
         _siteDir = Path.Combine(env.ContentRootPath, "site");
     }
 
@@ -275,8 +278,9 @@ public class PromptTools
     }
 
     [McpServerTool(Name = "diff"), Description(
-        "Line diff between two versions of a prompt's content. Only the prompt's owner or an " +
-        "admin may view it.")]
+        "Compares two versions of a prompt: the prompt text itself, each version's QA result " +
+        "and build status, and — when both versions produced a successful build — a diff of " +
+        "the generated HTML too. Only the prompt's owner or an admin may view it.")]
     public async Task<string> Diff(
         [Description("Prompt name")] string name,
         [Description("First version")] int v1,
@@ -288,11 +292,30 @@ public class PromptTools
 
         try
         {
-            return await _store.ReadAsync(store =>
+            var diff = await _store.ReadAsync(store => _promptService.Diff(store, name, v1, v2, username!, isAdmin));
+
+            // Only attempted when both versions actually produced a
+            // successful build — a failed/skipped build never wrote an
+            // artifact, and diffing against whatever stale file happens to
+            // still be on disk from an earlier build would be misleading.
+            IEnumerable<object>? artifactLines = null;
+            if (diff.V1.Build is { Status: BuildStatus.Success } b1 && diff.V2.Build is { Status: BuildStatus.Success } b2)
             {
-                var diffModel = _promptService.Diff(store, name, v1, v2, username!, isAdmin);
-                var lines = diffModel.Lines.Select(l => new { type = l.Type.ToString().ToLowerInvariant(), text = l.Text ?? "" });
-                return Ok(lines);
+                var html1 = await _writer.ReadVersionAsync(diff.PromptId, b1.BuildVersion);
+                var html2 = await _writer.ReadVersionAsync(diff.PromptId, b2.BuildVersion);
+                if (html1 != null && html2 != null)
+                {
+                    var artifactDiff = InlineDiffBuilder.Diff(html1, html2);
+                    artifactLines = artifactDiff.Lines.Select(l => (object)new { type = l.Type.ToString().ToLowerInvariant(), text = l.Text ?? "" });
+                }
+            }
+
+            return Ok(new
+            {
+                contentDiff = diff.ContentDiff.Lines.Select(l => new { type = l.Type.ToString().ToLowerInvariant(), text = l.Text ?? "" }),
+                v1 = VersionInfoJson(diff.V1),
+                v2 = VersionInfoJson(diff.V2),
+                artifactDiff = artifactLines,
             });
         }
         catch (InvalidOperationException ex)
@@ -304,6 +327,15 @@ public class PromptTools
             return Error(ex.Message);
         }
     }
+
+    private static object VersionInfoJson(PromptVersionDiffInfo info) => new
+    {
+        version = info.Version,
+        createdAt = info.CreatedAt,
+        qaPassed = info.Checkpoint?.Passed,
+        buildStatus = info.Build?.Status,
+        buildVersion = info.Build?.BuildVersion,
+    };
 
     private async Task<string> RunPipelineAsync(Func<Store, Task<PipelineResult>> action)
     {

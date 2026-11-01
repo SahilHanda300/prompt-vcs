@@ -29,4 +29,10 @@ public class ArtifactWriter : IArtifactWriter
         var path = Path.Combine(_siteRootDir, promptId, "index.html");
         return File.Exists(path) ? await File.ReadAllTextAsync(path) : null;
     }
+
+    public async Task<string?> ReadVersionAsync(string promptId, int buildVersion)
+    {
+        var path = Path.Combine(_siteRootDir, promptId, $"v{buildVersion}", "index.html");
+        return File.Exists(path) ? await File.ReadAllTextAsync(path) : null;
+    }
 }

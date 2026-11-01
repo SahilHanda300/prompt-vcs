@@ -58,8 +58,8 @@ public class ServerClient
     public async Task<ShowResultDto> ShowAsync(string name, int? version) =>
         await CallAsync<ShowResultDto>("show", new Dictionary<string, object?> { ["name"] = name, ["version"] = version });
 
-    public async Task<List<DiffLineDto>> DiffAsync(string name, int v1, int v2) =>
-        await CallAsync<List<DiffLineDto>>("diff", new Dictionary<string, object?> { ["name"] = name, ["v1"] = v1, ["v2"] = v2 });
+    public async Task<PromptDiffResultDto> DiffAsync(string name, int v1, int v2) =>
+        await CallAsync<PromptDiffResultDto>("diff", new Dictionary<string, object?> { ["name"] = name, ["v1"] = v1, ["v2"] = v2 });
 
     public async Task<WhoAmIResultDto> WhoAmIAsync() =>
         await CallAsync<WhoAmIResultDto>("whoAmI", new Dictionary<string, object?>());

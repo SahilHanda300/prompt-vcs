@@ -142,6 +142,21 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapGet("/", () => "PromptVCS MCP server is running. MCP endpoint: /mcp, runner hub: /runnerhub, artifacts: /site/<promptId>/, terminal: /terminal");
 app.MapGet("/terminal", () => Results.Redirect("/terminal.html"));
 
+// Downloads the last generated build's HTML source as a file — the static
+// on-disk snapshot (same one a /site/{id}/v{n}/ link serves), not a fresh
+// live-rendered copy: a download should be an instant, predictable file,
+// not something that spends a Claude Code call and varies between clicks.
+app.MapGet("/site/{id}/download", async (string id, IServerStore store, IArtifactWriter writer) =>
+{
+    var record = await store.ReadAsync(s => s.Prompts.GetValueOrDefault(id));
+    if (record == null) return Results.NotFound();
+
+    var html = await writer.ReadLatestAsync(id);
+    if (html == null) return Results.NotFound();
+
+    return Results.File(System.Text.Encoding.UTF8.GetBytes(html), "text/html", $"{record.Name}.html");
+});
+
 // Server-to-server only (PromptVcs.Web's Data Protection keyring, see
 // IDataProtectionKeyStore) — gated by a shared secret, not a user session,
 // since there's no logged-in user at the point Web needs to read/write its

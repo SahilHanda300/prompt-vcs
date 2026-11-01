@@ -22,6 +22,8 @@ public record PromptRecordDto(string Id, string Name, string? Owner, bool IsFavo
 public record ShowResultDto(PromptRecordDto Record, int Version, string Content);
 
 public record DiffLineDto(string Type, string Text);
+public record VersionDiffInfoDto(int Version, DateTimeOffset CreatedAt, bool? QaPassed, string? BuildStatus, int? BuildVersion);
+public record PromptDiffResultDto(List<DiffLineDto> ContentDiff, VersionDiffInfoDto V1, VersionDiffInfoDto V2, List<DiffLineDto>? ArtifactDiff);
 
 public record AuthResultDto(string? SessionToken, bool IsAdmin);
 public record LogoutResultDto(bool LoggedOut);

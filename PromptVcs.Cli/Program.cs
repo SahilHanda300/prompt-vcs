@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Text;
 using PromptVcs.Cli;
 
@@ -29,6 +30,7 @@ var commandUsage = new Dictionary<string, string>
     ["list"] = "list",
     ["show"] = "show <name> [--version <n>]",
     ["diff"] = "diff <name> <v1> <v2>",
+    ["download"] = "download <name> [--output <path>]",
     ["reset"] = "reset",
     ["whoami"] = "whoami",
     ["users"] = "users",
@@ -118,6 +120,9 @@ async Task<int> RunCommandAsync(string[] cmdArgs)
                 break;
             case "diff":
                 await RunDiffAsync(RequireArg(cmdArgs, 1, "name"), RequireArg(cmdArgs, 2, "v1"), RequireArg(cmdArgs, 3, "v2"));
+                break;
+            case "download":
+                await RunDownloadAsync(RequireArg(cmdArgs, 1, "name"), GetOption(cmdArgs, "--output", "-o"));
                 break;
             case "reset":
                 await RunResetAsync();
@@ -418,11 +423,83 @@ async Task RunShowAsync(string name, int? version)
     }
 }
 
+async Task RunDownloadAsync(string name, string? outputPath)
+{
+    // Goes straight over HTTP to mcp-server's /site/{id}/download, not
+    // through an MCP tool call — it's the same static, unauthenticated
+    // artifact endpoint the web app's "Download code" link uses (artifacts
+    // are already public at /site/{id}/, same trust model as viewing one).
+    var result = await client.ShowAsync(name, null);
+    var url = ResolveArtifactUrl($"/site/{result.Record.Id}/download");
+    if (url == null)
+    {
+        throw new InvalidOperationException("Could not resolve a download URL.");
+    }
+
+    using var http = new HttpClient();
+    using var response = await http.GetAsync(url);
+    if (!response.IsSuccessStatusCode)
+    {
+        throw new InvalidOperationException($"Download failed: {(int)response.StatusCode} {response.ReasonPhrase}");
+    }
+
+    var bytes = await response.Content.ReadAsByteArrayAsync();
+    var path = outputPath ?? $"{name}.html";
+    await File.WriteAllBytesAsync(path, bytes);
+    WriteLineColor($"Saved to {Path.GetFullPath(path)}", ConsoleColor.Green);
+}
+
 async Task RunDiffAsync(string name, string v1Raw, string v2Raw)
 {
     var v1 = int.Parse(v1Raw);
     var v2 = int.Parse(v2Raw);
-    var lines = await client.DiffAsync(name, v1, v2);
+    var diff = await client.DiffAsync(name, v1, v2);
+
+    PrintVersionSummary(diff.V1);
+    PrintVersionSummary(diff.V2);
+    Console.WriteLine();
+
+    Console.WriteLine("Prompt text:");
+    PrintDiffLines(diff.ContentDiff);
+
+    if (diff.ArtifactDiff != null)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Generated code:");
+        PrintDiffLines(diff.ArtifactDiff);
+    }
+    else
+    {
+        Console.WriteLine();
+        WriteLineColor("(No generated-code diff — one or both versions never produced a successful build.)", ConsoleColor.Yellow);
+    }
+}
+
+void PrintVersionSummary(VersionDiffInfoDto info)
+{
+    Console.Write($"v{info.Version} — {info.CreatedAt.ToLocalTime():MMM d, h:mm tt} — ");
+    if (info.QaPassed == null)
+    {
+        Console.Write("no QA checkpoint");
+    }
+    else
+    {
+        WriteColor(info.QaPassed == true ? "QA passed" : "QA failed", info.QaPassed == true ? ConsoleColor.Green : ConsoleColor.Red);
+    }
+    Console.Write(" — ");
+    if (info.BuildStatus == null)
+    {
+        Console.Write("no build");
+    }
+    else
+    {
+        WriteColor($"build {info.BuildStatus} (v{info.BuildVersion})", BuildStatusColor(info.BuildStatus));
+    }
+    Console.WriteLine();
+}
+
+void PrintDiffLines(List<DiffLineDto> lines)
+{
     foreach (var line in lines)
     {
         var (prefix, color) = line.Type switch
@@ -636,6 +713,7 @@ static void PrintUsage()
     PrintCommand("list", "Lists all apps");
     PrintCommand("show <name> [--version <n>]", "Shows a specific version of an app");
     PrintCommand("diff <name> <v1> <v2>", "Shows the differences between two versions of an app");
+    PrintCommand("download <name> [--output <path>]", "Saves the generated HTML artifact to a local file");
     PrintCommand("reset", "Deletes all apps and resets the store (admin only)");
     PrintCommand("whoami", "Shows the current username and role");
     PrintCommand("users", "Lists all registered users (admin only)");

@@ -32,7 +32,7 @@ public class PromptModel : PageModel
 
     public PromptRecordDto? Record { get; set; }
     public int Version { get; set; }
-    public List<DiffLineDto>? DiffLines { get; set; }
+    public PromptDiffResultDto? Diff { get; set; }
     public string? ErrorMessage { get; set; }
     public string? SuccessMessage { get; set; }
     public string SiteBaseUrl => ServerClient.SiteBaseUrl();
@@ -65,7 +65,7 @@ public class PromptModel : PageModel
         {
             try
             {
-                DiffLines = await _client.DiffAsync(Name, V1.Value, V2.Value, token);
+                Diff = await _client.DiffAsync(Name, V1.Value, V2.Value, token);
             }
             catch (InvalidOperationException ex)
             {

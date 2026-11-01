@@ -112,12 +112,20 @@ public class PromptService : IPromptService
         return (record, entry.Version, entry.Content);
     }
 
-    public DiffPaneModel Diff(Store store, string name, int v1, int v2, string callerUsername, bool callerIsAdmin)
+    public PromptDiffResult Diff(Store store, string name, int v1, int v2, string callerUsername, bool callerIsAdmin)
     {
         var record = GetOwnedOrThrow(store, name, callerUsername, callerIsAdmin);
         var e1 = record.History.FirstOrDefault(h => h.Version == v1) ?? throw new InvalidOperationException($"Version {v1} not found for prompt \"{name}\".");
         var e2 = record.History.FirstOrDefault(h => h.Version == v2) ?? throw new InvalidOperationException($"Version {v2} not found for prompt \"{name}\".");
-        return InlineDiffBuilder.Diff(e1.Content, e2.Content);
+        var contentDiff = InlineDiffBuilder.Diff(e1.Content, e2.Content);
+
+        PromptVersionDiffInfo Info(PromptVersion entry) => new(
+            entry.Version,
+            entry.CreatedAt,
+            record.QaCheckpoints.LastOrDefault(c => c.Version == entry.Version),
+            record.Builds.LastOrDefault(b => b.PromptVersion == entry.Version));
+
+        return new PromptDiffResult(record.Id, contentDiff, Info(e1), Info(e2));
     }
 
     private static PromptRecord GetOwnedOrThrow(Store store, string name, string callerUsername, bool callerIsAdmin)

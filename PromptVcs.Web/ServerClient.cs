@@ -152,8 +152,8 @@ public class ServerClient
     public Task<ShowResultDto> ShowAsync(string name, int? version, string sessionToken) =>
         CallAsync<ShowResultDto>("show", new Dictionary<string, object?> { ["name"] = name, ["version"] = version, ["sessionToken"] = sessionToken });
 
-    public Task<List<DiffLineDto>> DiffAsync(string name, int v1, int v2, string sessionToken) =>
-        CallAsync<List<DiffLineDto>>("diff", new Dictionary<string, object?> { ["name"] = name, ["v1"] = v1, ["v2"] = v2, ["sessionToken"] = sessionToken });
+    public Task<PromptDiffResultDto> DiffAsync(string name, int v1, int v2, string sessionToken) =>
+        CallAsync<PromptDiffResultDto>("diff", new Dictionary<string, object?> { ["name"] = name, ["v1"] = v1, ["v2"] = v2, ["sessionToken"] = sessionToken });
 
     private static async Task<T> CallAsync<T>(string toolName, Dictionary<string, object?> arguments)
     {

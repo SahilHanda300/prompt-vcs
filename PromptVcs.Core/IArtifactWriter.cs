@@ -19,4 +19,10 @@ public interface IArtifactWriter
     /// Null if no previous artifact exists on disk yet (first run, or the
     /// container's disk was wiped since the last successful build).
     Task<string?> ReadLatestAsync(string promptId);
+
+    /// Reads one specific build's versioned copy, e.g. for diffing the
+    /// generated HTML between two builds rather than just their prompt
+    /// text. Null if that build's files aren't on disk (never wrote
+    /// successfully, or the container's disk was wiped since).
+    Task<string?> ReadVersionAsync(string promptId, int buildVersion);
 }

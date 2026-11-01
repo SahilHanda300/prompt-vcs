@@ -2,6 +2,17 @@ using DiffPlex.DiffBuilder.Model;
 
 namespace PromptVcs.Core;
 
+/// Per-version context alongside a content diff — lets a caller show more
+/// than just the typed text change: when each version was created, whether
+/// its QA checkpoint passed, and what its build did (if anything). Doesn't
+/// include the generated HTML itself — that's a separate, optional file
+/// read the caller (PromptTools) does only when both versions actually
+/// have a successful build, since PromptService stays pure in-memory logic
+/// with no filesystem knowledge of its own.
+public record PromptVersionDiffInfo(int Version, DateTimeOffset CreatedAt, QaCheckpoint? Checkpoint, Build? Build);
+
+public record PromptDiffResult(string PromptId, DiffPaneModel ContentDiff, PromptVersionDiffInfo V1, PromptVersionDiffInfo V2);
+
 /// <summary>
 /// Prompt CRUD plus ownership enforcement. All methods take the in-memory
 /// Store directly (the caller — ServerStore's ReadAsync/MutateAsync — owns
@@ -42,5 +53,8 @@ public interface IPromptService
     List<PromptRecord> List(Store store, string callerUsername, bool callerIsAdmin);
 
     (PromptRecord Record, int Version, string Content) Show(Store store, string name, string callerUsername, bool callerIsAdmin, int? version = null);
-    DiffPaneModel Diff(Store store, string name, int v1, int v2, string callerUsername, bool callerIsAdmin);
+
+    /// Content diff plus each version's QA/build context — see
+    /// PromptVersionDiffInfo. Does not read the generated artifact itself.
+    PromptDiffResult Diff(Store store, string name, int v1, int v2, string callerUsername, bool callerIsAdmin);
 }
