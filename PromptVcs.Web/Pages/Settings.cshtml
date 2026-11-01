@@ -12,7 +12,7 @@
 
     <div class="bg-white dark:bg-brown-800 border border-brown-200 dark:border-brown-700 rounded-xl p-5 sm:p-6 mb-6">
         <h2 class="text-lg font-semibold mb-1">Change username</h2>
-        <p class="text-brown-500 dark:text-brown-400 text-sm mb-4">Used to log in to the web app, CLI, and browser terminal.</p>
+        <p class="text-brown-500 dark:text-brown-400 text-sm mb-4">Used to log in to the web app and CLI.</p>
         <form method="post" asp-page-handler="ChangeUsername" class="flex flex-col gap-4 max-w-sm">
             <div>
                 <label for="NewUsername" class="block text-sm font-medium mb-1.5">New username</label>
@@ -33,7 +33,7 @@
 
     <div class="bg-white dark:bg-brown-800 border border-brown-200 dark:border-brown-700 rounded-xl p-5 sm:p-6">
         <h2 class="text-lg font-semibold mb-1">Change password</h2>
-        <p class="text-brown-500 dark:text-brown-400 text-sm mb-4">Same account everywhere — the CLI and browser terminal pick up the new password on next login.</p>
+        <p class="text-brown-500 dark:text-brown-400 text-sm mb-4">Same account everywhere — the CLI picks up the new password on next login.</p>
         <form method="post" asp-page-handler="ChangePassword" class="flex flex-col gap-4 max-w-sm">
             <div>
                 <label for="CurrentPassword" class="block text-sm font-medium mb-1.5">Current password</label>
