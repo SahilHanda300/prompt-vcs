@@ -164,6 +164,27 @@ public class GenerationPromptBuilder : IGenerationPromptBuilder
             previousArtifact);
     }
 
+    /// Re-renders content only, never structure — the reference artifact
+    /// below is given specifically so a refresh reuses the exact same CSS
+    /// classes/layout instead of inventing a new design each visit (which
+    /// would make the page visibly reflow/restyle on every refresh).
+    public string BuildLiveRefreshPrompt(string promptName, string originalContent, string currentArtifact)
+    {
+        return string.Join("\n",
+            "You are refreshing the content of an existing self-contained, single-file HTML artifact for a tool called PromptVCS. The page below was already generated and published; your job is only to update what it says, using whatever current information you have access to right now (use a web search tool if one is available to you, for the most up-to-date facts) — not to redesign it.",
+            "Reuse the exact same CSS classes, structure, and visual design already present in the page below. Do not introduce new class names, new <style> rules, or a different layout — a visitor refreshing the page should see the same design with updated content, not a different-looking page.",
+            "Replace stale or time-sensitive content (the reason this page needs refreshing) with your current best information. Leave anything that isn't time-sensitive (static copy, structure, styling) unchanged.",
+            "If you have no way to confirm live/current data right now, say so honestly within the page's existing content area (e.g. note the information may not be current) rather than inventing specific facts, numbers, or dates.",
+            "Respond with ONLY the complete updated HTML document — no explanation, no markdown code fences.",
+            "",
+            $"Prompt name: {promptName}",
+            "Original prompt (for what this page is about):",
+            originalContent,
+            "",
+            "Current page to refresh:",
+            currentArtifact);
+    }
+
     private static string FormatDiffLine(DiffPiece line) => line.Type switch
     {
         ChangeType.Inserted => $"+ {line.Text}",

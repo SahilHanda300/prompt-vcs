@@ -14,6 +14,14 @@ public interface IGenerationPromptBuilder
     string BuildFirstRunScreenPrompt(string promptName, string content);
     string BuildUpdatePrompt(string promptName, string previousContent, string newContent, string previousArtifact);
 
+    /// Asks Claude Code to re-render a published page's content with
+    /// whatever current information it has access to right now, reusing
+    /// the reference page's exact visual design (CSS classes/structure) so
+    /// a refresh never changes how the page looks, only what it says.
+    /// Called by LiveContentService on each cache-expired visit, for every
+    /// site, not as part of the normal create/edit pipeline.
+    string BuildLiveRefreshPrompt(string promptName, string originalContent, string currentArtifact);
+
     /// Always these 4 roles, in this fixed order, for a parallel-generated
     /// content-type first run — see GenerationPromptBuilder for why this is
     /// fixed rather than model-decided.

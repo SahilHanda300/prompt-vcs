@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.FileProviders;
 using PromptVcs.Core;
 using PromptVcs.McpServer.Hubs;
@@ -50,6 +51,7 @@ builder.Services.AddSingleton<IQaService, Qa>();
 builder.Services.AddSingleton<IPublishService, PublishRules>();
 builder.Services.AddSingleton<IPipelineService, Pipeline>();
 builder.Services.AddSingleton<IPromptService, PromptService>();
+builder.Services.AddSingleton<ILiveContentService, LiveContentService>();
 
 // Auth — AuthService composes these four single-purpose collaborators
 // instead of doing hashing + password-policy + user storage + session
@@ -76,6 +78,48 @@ app.UseStaticFiles(); // default wwwroot — serves wwwroot/terminal.html at /te
 
 var siteDir = Path.Combine(app.Environment.ContentRootPath, "site");
 Directory.CreateDirectory(siteDir);
+
+// Every site's root gets re-rendered through Claude Code on each visit
+// instead of being served as the static snapshot taken at generation time
+// — see ILiveContentService. Only the root alias (/site/{id} or
+// /site/{id}/) is dynamic; a specific /site/{id}/v{n}/ build stays an
+// immutable historical artifact, same as before. Placed ahead of
+// UseStaticFiles so it can intercept before the static file server would
+// otherwise just serve the on-disk index.html.
+var sitePattern = new Regex(@"^/site/([^/]+)/?$", RegexOptions.Compiled);
+app.Use(async (context, next) =>
+{
+    var match = sitePattern.Match(context.Request.Path.Value ?? "");
+    if (!match.Success)
+    {
+        await next(context);
+        return;
+    }
+
+    var promptId = match.Groups[1].Value;
+    var store = context.RequestServices.GetRequiredService<IServerStore>();
+    var record = await store.ReadAsync(s => s.Prompts.GetValueOrDefault(promptId));
+    if (record == null)
+    {
+        await next(context);
+        return;
+    }
+
+    var writer = context.RequestServices.GetRequiredService<IArtifactWriter>();
+    var cachedHtml = await writer.ReadLatestAsync(promptId);
+    if (cachedHtml == null)
+    {
+        await next(context);
+        return;
+    }
+
+    var originalContent = record.History.LastOrDefault()?.Content ?? "";
+    var live = context.RequestServices.GetRequiredService<ILiveContentService>();
+    var freshHtml = await live.GetFreshHtmlAsync(record, originalContent, cachedHtml, context.RequestAborted);
+
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.WriteAsync(freshHtml ?? cachedHtml, context.RequestAborted);
+});
 
 app.UseDefaultFiles(new DefaultFilesOptions
 {
