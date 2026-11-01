@@ -4,16 +4,16 @@
     ViewData["Title"] = "Settings";
 }
 
-<section class="max-w-sm mx-auto px-6 py-16 sm:py-20">
-    <h1 class="text-2xl font-bold mb-2">Settings</h1>
-    <p class="text-brown-500 dark:text-brown-400 text-sm mb-8">Signed in as <strong class="text-brown-800 dark:text-brown-100 font-semibold">@Model.CurrentUsername</strong>.</p>
+<section class="max-w-3xl mx-auto px-6 py-12 sm:py-16">
+    <h1 class="text-2xl sm:text-3xl font-bold mb-2">Settings</h1>
+    <p class="text-brown-500 dark:text-brown-400 mb-8">Signed in as <strong class="text-brown-800 dark:text-brown-100 font-semibold">@Model.CurrentUsername</strong>.</p>
 
     <partial name="_Toast" model="new ToastData(Model.ErrorMessage, Model.SuccessMessage)" />
 
     <div class="bg-white dark:bg-brown-800 border border-brown-200 dark:border-brown-700 rounded-xl p-5 sm:p-6 mb-6">
         <h2 class="text-lg font-semibold mb-1">Change username</h2>
         <p class="text-brown-500 dark:text-brown-400 text-sm mb-4">Used to log in to the web app, CLI, and browser terminal.</p>
-        <form method="post" asp-page-handler="ChangeUsername" class="flex flex-col gap-4">
+        <form method="post" asp-page-handler="ChangeUsername" class="flex flex-col gap-4 max-w-sm">
             <div>
                 <label for="NewUsername" class="block text-sm font-medium mb-1.5">New username</label>
                 <input type="text" id="NewUsername" name="NewUsername" value="@Model.NewUsername" autocomplete="username"
@@ -34,7 +34,7 @@
     <div class="bg-white dark:bg-brown-800 border border-brown-200 dark:border-brown-700 rounded-xl p-5 sm:p-6">
         <h2 class="text-lg font-semibold mb-1">Change password</h2>
         <p class="text-brown-500 dark:text-brown-400 text-sm mb-4">Same account everywhere — the CLI and browser terminal pick up the new password on next login.</p>
-        <form method="post" asp-page-handler="ChangePassword" class="flex flex-col gap-4">
+        <form method="post" asp-page-handler="ChangePassword" class="flex flex-col gap-4 max-w-sm">
             <div>
                 <label for="CurrentPassword" class="block text-sm font-medium mb-1.5">Current password</label>
                 <input type="password" id="CurrentPassword" name="CurrentPassword" autocomplete="current-password"
