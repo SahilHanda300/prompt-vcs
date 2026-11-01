@@ -10,6 +10,16 @@
 
     <partial name="_Toast" model="new ToastData(Model.ErrorMessage, Model.SuccessMessage)" />
 
+    <div class="relative mb-6">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brown-400 dark:text-brown-500">
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path stroke-linecap="round" d="M20 20l-4.3-4.3" />
+        </svg>
+        <input type="search" id="adminSearch" placeholder="Search users and prompts..." autocomplete="off"
+               class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-brown-300 dark:border-brown-600 bg-white dark:bg-brown-800 text-brown-800 dark:text-brown-100 text-sm focus:outline-none focus:ring-2 focus:ring-brown-400" />
+        <p id="adminSearchNoResults" class="hidden mt-2 text-sm text-brown-500 dark:text-brown-400">No users or prompts match "<span id="adminSearchNoResultsQuery"></span>".</p>
+    </div>
+
     <div class="flex gap-1 mb-6 border-b border-brown-200 dark:border-brown-700" role="tablist">
         <button type="button" data-tab="users" class="admin-tab px-4 py-2 text-sm font-medium border-b-2 -mb-px transition">Account &amp; Users</button>
         <button type="button" data-tab="prompts" class="admin-tab px-4 py-2 text-sm font-medium border-b-2 -mb-px transition">Prompts</button>
@@ -57,11 +67,11 @@
         }
         else
         {
-            <div class="flex flex-col divide-y divide-brown-200 dark:divide-brown-700 mb-5">
+            <div id="usersList" class="flex flex-col divide-y divide-brown-200 dark:divide-brown-700 mb-5">
                 @foreach (var u in Model.Users)
                 {
                     var isSelf = u.Username == User.Identity!.Name;
-                    <div class="@(isSelf ? "" : "group") py-3">
+                    <div class="user-row @(isSelf ? "" : "group") py-3">
                         @if (isSelf)
                         {
                             <div class="flex items-center justify-between text-sm">
@@ -167,10 +177,10 @@
             var promptsByOwner = Model.Prompts
                 .GroupBy(p => p.Owner ?? "(legacy, no owner)")
                 .OrderBy(g => g.Key, StringComparer.Ordinal);
-            <div class="flex flex-col divide-y divide-brown-200 dark:divide-brown-700">
+            <div id="promptsList" class="flex flex-col divide-y divide-brown-200 dark:divide-brown-700">
                 @foreach (var ownerGroup in promptsByOwner)
                 {
-                    <details class="group/owner py-2.5">
+                    <details class="owner-group group/owner py-2.5">
                         <summary class="flex items-center justify-between text-sm cursor-pointer list-none">
                             <span>@ownerGroup.Key</span>
                             <span class="flex items-center gap-3">
@@ -182,7 +192,7 @@
                         <div class="mt-3 pl-1 flex flex-col divide-y divide-brown-200 dark:divide-brown-700">
                             @foreach (var p in ownerGroup)
                             {
-                                <div class="flex items-center justify-between gap-3 py-2.5 text-sm">
+                                <div class="prompt-row flex items-center justify-between gap-3 py-2.5 text-sm">
                                     <a asp-page="/Prompt" asp-route-name="@p.Name" class="font-medium hover:text-brown-600 dark:hover:text-brown-400 transition truncate min-w-0">@p.Name</a>
                                     <form method="post" asp-page-handler="DeletePrompt">
                                         <input type="hidden" name="name" value="@p.Name" />
@@ -223,8 +233,10 @@
             var panels = { users: document.getElementById('tab-users'), prompts: document.getElementById('tab-prompts'), danger: document.getElementById('tab-danger') };
             var activeClasses = ['border-brown-500', 'text-brown-600', 'dark:text-brown-400'];
             var inactiveClasses = ['border-transparent', 'text-brown-500', 'dark:text-brown-400'];
+            var currentTab = 'users';
 
             function setTab(name) {
+                currentTab = name;
                 tabs.forEach(function (tab) {
                     var isActive = tab.dataset.tab === name;
                     tab.classList.remove.apply(tab.classList, activeClasses.concat(inactiveClasses));
@@ -243,6 +255,66 @@
             var stored = null;
             try { stored = localStorage.getItem('promptvcs-admin-tab'); } catch (e) { }
             setTab(panels[stored] ? stored : 'users');
+
+            // Global search — filters the users list and the prompts list
+            // (grouped by owner) at once, from whichever tab is open, and
+            // auto-switches to whichever tab actually has matches so a
+            // search never looks like it found nothing just because the
+            // wrong tab happened to be showing.
+            var searchInput = document.getElementById('adminSearch');
+            var noResults = document.getElementById('adminSearchNoResults');
+            var noResultsQuery = document.getElementById('adminSearchNoResultsQuery');
+            var userRows = document.querySelectorAll('#usersList .user-row');
+            var ownerGroups = document.querySelectorAll('#promptsList .owner-group');
+
+            function applySearch() {
+                var query = searchInput.value.trim().toLowerCase();
+
+                var userMatches = 0;
+                userRows.forEach(function (row) {
+                    var match = !query || row.textContent.toLowerCase().indexOf(query) !== -1;
+                    row.classList.toggle('hidden', !match);
+                    if (match) userMatches++;
+                });
+
+                var promptMatches = 0;
+                ownerGroups.forEach(function (group) {
+                    if (query && group.dataset.wasOpen === undefined) {
+                        group.dataset.wasOpen = group.open ? '1' : '0';
+                    }
+
+                    var ownerMatches = !query || group.querySelector('summary').textContent.toLowerCase().indexOf(query) !== -1;
+                    var rows = group.querySelectorAll('.prompt-row');
+                    var groupHasMatch = ownerMatches;
+                    rows.forEach(function (row) {
+                        var rowMatch = !query || ownerMatches || row.textContent.toLowerCase().indexOf(query) !== -1;
+                        row.classList.toggle('hidden', !rowMatch);
+                        if (rowMatch) { groupHasMatch = true; promptMatches++; }
+                    });
+
+                    group.classList.toggle('hidden', query !== '' && !groupHasMatch);
+                    if (query) {
+                        if (groupHasMatch) group.open = true;
+                    } else if (group.dataset.wasOpen !== undefined) {
+                        group.open = group.dataset.wasOpen === '1';
+                        delete group.dataset.wasOpen;
+                    }
+                });
+
+                if (query && userMatches === 0 && promptMatches === 0) {
+                    noResultsQuery.textContent = searchInput.value.trim();
+                    noResults.classList.remove('hidden');
+                } else {
+                    noResults.classList.add('hidden');
+                }
+
+                if (query && currentTab !== 'danger') {
+                    if (currentTab === 'users' && userMatches === 0 && promptMatches > 0) setTab('prompts');
+                    else if (currentTab === 'prompts' && promptMatches === 0 && userMatches > 0) setTab('users');
+                }
+            }
+
+            searchInput.addEventListener('input', applySearch);
         })();
     </script>
 }
